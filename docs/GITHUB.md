@@ -8,7 +8,7 @@ This document defines the agent permissions, issue tracking standards, and pull 
 
 When interacting with Git, GitHub APIs, or the GitHub Model Context Protocol (MCP) server:
 
-- **Strict Permission Boundary for Issues:** The agent is **only authorized to create issues when explicitly requested by the user**.
+- **Strict Permission Boundary for Issues:** The agent is **only authorized to create issues when explicitly requested by the user**. Upon receiving explicit confirmation (e.g., `"Pode criar a issue no GitHub"`), Antigravity creates the issue itself directly and reports the link.
 - **Decoupled Actions (Issue Creation vs. Implementation):**
   - **Creating an issue does NOT mean implementing it.** Creating an issue on GitHub (`"Criar uma issue no GitHub"`) and implementing an issue (`"Implementar a issue [link ou id]"`) are strictly separated operations.
   - The agent must **NEVER** begin implementing code autonomously merely because an issue was opened, referenced, or discussed. Implementation requires a distinct, explicit user command.
@@ -18,8 +18,8 @@ When interacting with Git, GitHub APIs, or the GitHub Model Context Protocol (MC
 - **Commit Sign-Off Gate:**
   - The agent is only permitted to generate the commit message and push the branch once the user explicitly validates and approves the code package (e.g., stating `"Finalizado esse pacote de código"` or equivalent explicit confirmation).
 - **User-Gated Pull Request (PR) Creation:**
-  - Creating a Pull Request is never automated.
-  - The agent must wait for an explicit user command (e.g., `"agora podemos subir o PR"`) before opening a PR on GitHub.
+  - Creating a Pull Request requires explicit user authorization.
+  - Upon receiving an explicit command (e.g., `"agora podemos subir o PR"` or `"Criar PR"`), **Antigravity itself directly creates the Pull Request** on GitHub (using MCP or GitHub API), linking the issue with `Resolves #<id>`, without deflecting or requiring the user to create it manually.
 - **No Autonomous Writes or Deletions:** The agent must never close issues, merge code, or delete branches/resources autonomously without direct user authorization.
 
 ---
