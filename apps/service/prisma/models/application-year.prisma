@@ -1,0 +1,18 @@
+enum EducationStage {
+  INFANTIL
+  FUNDAMENTAL_I
+  FUNDAMENTAL_II
+  MEDIO
+}
+
+model ApplicationYear {
+  id        String         @id @default(uuid())
+  name      String         @unique
+  stage     EducationStage
+  targetAge String         @map("target_age")
+  skills    BnccSkill[]
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@map("application_years")
+}
