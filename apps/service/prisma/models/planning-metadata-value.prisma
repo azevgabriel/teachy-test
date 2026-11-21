@@ -1,0 +1,15 @@
+model PlanningMetadataValue {
+  id              String         @id @default(uuid())
+  specificationId String         @map("specification_id")
+  specification   Specification  @relation(fields: [specificationId], references: [id], onDelete: Cascade)
+  planningId      String?        @map("planning_id")
+  planning        Planning?      @relation(fields: [planningId], references: [id], onDelete: Cascade)
+  planningBlockId String?        @map("planning_block_id")
+  planningBlock   PlanningBlock? @relation(fields: [planningBlockId], references: [id], onDelete: Cascade)
+  textValue       String?        @map("text_value") @db.Text
+  jsonbValue      Json?          @map("jsonb_value")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@map("planning_metadata_values")
+}

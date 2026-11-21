@@ -1,0 +1,13 @@
+model LearningObjective {
+  id              String         @id @default(uuid())
+  bnccSkillId     String         @map("bncc_skill_id")
+  bnccSkill       BnccSkill      @relation(fields: [bnccSkillId], references: [id], onDelete: Cascade)
+  planningId      String?        @map("planning_id")
+  planning        Planning?      @relation(fields: [planningId], references: [id], onDelete: Cascade)
+  planningBlockId String?        @map("planning_block_id")
+  planningBlock   PlanningBlock? @relation(fields: [planningBlockId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@map("learning_objectives")
+}

@@ -1,0 +1,18 @@
+model Evaluation {
+  id              String         @id @default(uuid())
+  planningId      String?        @map("planning_id")
+  planning        Planning?      @relation(fields: [planningId], references: [id], onDelete: Cascade)
+  planningBlockId String?        @map("planning_block_id")
+  planningBlock   PlanningBlock? @relation(fields: [planningBlockId], references: [id], onDelete: Cascade)
+  name            String?
+  instrumentType  String?        @map("instrument_type")
+  grade           Decimal?       @db.Decimal(5, 2)
+  criteria        String?        @db.Text
+  description     String?        @db.Text
+  startAt         DateTime?      @map("start_at")
+  endAt           DateTime?      @map("end_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@map("evaluations")
+}
