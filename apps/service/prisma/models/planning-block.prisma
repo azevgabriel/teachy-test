@@ -1,0 +1,20 @@
+model PlanningBlock {
+  id                 String                  @id @default(uuid())
+  planningId         String                  @map("planning_id")
+  planning           Planning                @relation(fields: [planningId], references: [id], onDelete: Cascade)
+  parentId           String?                 @map("parent_id")
+  parent             PlanningBlock?          @relation("BlockHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children           PlanningBlock[]         @relation("BlockHierarchy")
+  granularity        PlanningGranularity?
+  startAt            DateTime?               @map("start_at")
+  endAt              DateTime?               @map("end_at")
+  metodologia        String?                 @db.Text
+  order              Int                     @default(0)
+  learningObjectives LearningObjective[]
+  metadataValues     PlanningMetadataValue[]
+  evaluations        Evaluation[]
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
+
+  @@map("planning_blocks")
+}

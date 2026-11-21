@@ -11,6 +11,7 @@ model ApplicationYear {
   stage     EducationStage
   targetAge String         @map("target_age")
   skills    BnccSkill[]
+  plannings Planning[]
   createdAt DateTime       @default(now()) @map("created_at")
   updatedAt DateTime       @updatedAt @map("updated_at")
 

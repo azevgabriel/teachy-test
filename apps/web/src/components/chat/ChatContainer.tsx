@@ -83,7 +83,7 @@ export function ChatContainer({
 			firstMessageSentRef.current !== pendingFirstMessage
 		) {
 			firstMessageSentRef.current = pendingFirstMessage;
-			sendMessage(activeSessionId, pendingFirstMessage);
+			sendMessage(activeSessionId ?? null, pendingFirstMessage);
 			// Remove o query param da URL sem recarregar a tela
 			navigate({
 				to: "/chat/$sessionId",
@@ -124,7 +124,7 @@ export function ChatContainer({
 		if (!activeSessionTitle) {
 			setActiveSessionTitle(text.slice(0, 30));
 		}
-		sendMessage(activeSessionId, text);
+		sendMessage(activeSessionId ?? null, text);
 	};
 
 	const handleCopyMessage = React.useCallback((text: string) => {
@@ -230,19 +230,20 @@ export function ChatContainer({
 							<Sparkles className="h-7 w-7" />
 						</div>
 						<h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">
-							Como posso ajudar com seus planos de aula?
+							Vamos estruturar seu Planejamento Escolar?
 						</h2>
 						<p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mb-6 leading-relaxed">
-							Envie uma mensagem abaixo para iniciar a conversa. A primeira
-							interação criará automaticamente uma sessão de contexto.
+							Indique a granularidade (semanal, mensal, trimestral ou
+							semestral), o componente curricular, o ano escolar e as
+							habilidades que deseja trabalhar.
 						</p>
 
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-lg w-full text-left">
 							{[
-								"Criar um plano de aula de frações para o 6º ano",
-								"Sugerir atividades práticas de Ciências sobre ecossistemas",
-								"Alinhar objetivos de aprendizagem com a BNCC de Língua Portuguesa",
-								"Elaborar uma avaliação formativa para o Ensino Médio",
+								"Criar planejamento semanal de Língua Portuguesa para o 3º ano",
+								"Construir um planejamento trimestral de Matemática dividido mensalmente",
+								"Quero trabalhar habilidades específicas no meu planejamento dessa semana de Ciências",
+								"Criar planejamento semestral de História organizado por semanas para a 2ª série",
 							].map((prompt) => (
 								<button
 									key={prompt}
