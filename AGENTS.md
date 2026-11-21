@@ -1,0 +1,31 @@
+# TeachyTest — Instructions for Coding Agents
+
+This document defines the core invariants, operating workflows, and context boundaries for coding agents working in the `teachy-test` monorepo.
+
+---
+
+## 🛡️ Always
+
+1. **Strict Context Grounding:** Before creating code or proposing architecture, agents must anchor themselves in the target domain's documentation (`apps/web/docs/` or `apps/service/docs/`). Never mix patterns between applications.
+2. **GitHub & Git Execution Boundaries:** Follow [docs/GITHUB.md](docs/GITHUB.md) strictly. Autonomous issue creation, direct commits to `main`, autonomous pushes, and automated PR creations are strictly prohibited.
+3. **Decoupled Workflows & Human Gates:** Follow [docs/WORKFLOW.md](docs/WORKFLOW.md) strictly. The Decision-Making Workflow (interactive issue framing) and the Implementation Workflow (coding against an authorized issue) are strictly separated. One never automatically triggers the other.
+
+---
+
+## 📚 Global Documentation
+
+| Document | Purpose |
+| :--- | :--- |
+| 📖 [docs/WORKFLOW.md](docs/WORKFLOW.md) | Fluxo de trabalho da IA: tomada de decisão, portões de aprovação humana e ciclo de implementação. |
+| 📖 [docs/GITHUB.md](docs/GITHUB.md) | GitHub & MCP guidelines: agent permissions, issue tracking, branch conventions, and PR workflow. |
+
+---
+
+## 🗺️ Monorepo Domains & Context Entry Points
+
+The monorepo is divided into strict domains. Before modifying any application, the agent **MUST** read the entry point document indicated in the table below.
+
+| Path | Tech Stack & Role | Local Context Entry Point |
+| :--- | :--- | :--- |
+| `apps/service/` | **Backend Core (NestJS + Prisma + PostgreSQL):** Business logic, persistence, and asynchronous task orchestration. | 📖 Read [`apps/service/docs/GLOBAL.md`](apps/service/docs/GLOBAL.md) |
+| `apps/web/` | **Frontend (React + TanStack Router + Tailwind CSS):** Teacher-facing interactive UI. | 📖 Read [`apps/web/docs/GLOBAL.md`](apps/web/docs/GLOBAL.md) |
