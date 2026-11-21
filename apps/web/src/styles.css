@@ -15,3 +15,11 @@ body {
   margin: 0;
 }
 
+/* KaTeX custom responsive math styling */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+
