@@ -26,9 +26,12 @@ services:
         DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-teachy_db}?schema=public
     container_name: teachy_service
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-teachy_db}?schema=public
       PORT: ${PORT:-3000}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports:
       - '${PORT:-3000}:3000'
     depends_on:
