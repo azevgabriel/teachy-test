@@ -1,3 +1,4 @@
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
 import { z } from "zod";
@@ -10,7 +11,8 @@ const chatSearchSchema = z.object({
 });
 
 export const Route = createFileRoute("/chat/$sessionId")({
-	validateSearch: (search) => chatSearchSchema.parse(search),
+	validateSearch: (search: Record<string, unknown>) =>
+		chatSearchSchema.parse(search),
 	loader: async ({ params: { sessionId } }): Promise<SessionDetail> => {
 		const res = await fetch(`/api/sessions/${sessionId}`);
 		if (!res.ok) {
@@ -24,14 +26,15 @@ export const Route = createFileRoute("/chat/$sessionId")({
 });
 
 function ChatSessionPage() {
-	const session = Route.useLoaderData();
-	const { message } = Route.useSearch();
+	const session = Route.useLoaderData() as SessionDetail;
+	const search = Route.useSearch() as { message?: string };
+	const message = search?.message;
 
 	return (
 		<ChatContainer
-			sessionId={session.id}
-			sessionTitle={session.name}
-			initialMessages={session.conversations}
+			sessionId={session?.id}
+			sessionTitle={session?.name}
+			initialMessages={session?.conversations ?? []}
 			pendingFirstMessage={message}
 		/>
 	);
@@ -48,7 +51,12 @@ function ChatLoadingSkeleton() {
 	);
 }
 
-function ChatErrorView({ error }: { error: Error }) {
+function ChatErrorView({ error }: ErrorComponentProps) {
+	const errorMessage =
+		error instanceof Error
+			? error.message
+			: String(error || "Não foi possível carregar a sessão informada.");
+
 	return (
 		<div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
 			<div className="max-w-md w-full bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/50 rounded-2xl p-6 shadow-sm text-center flex flex-col items-center">
@@ -59,7 +67,7 @@ function ChatErrorView({ error }: { error: Error }) {
 					Ops, algo deu errado
 				</h2>
 				<p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-					{error.message || "Não foi possível carregar a sessão informada."}
+					{errorMessage}
 				</p>
 				<Button
 					onClick={() => {

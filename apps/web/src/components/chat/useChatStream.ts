@@ -41,7 +41,10 @@ export function useChatStream({
 	}, []);
 
 	const sendMessage = React.useCallback(
-		async (sessionId: string | null, text: string): Promise<string | null> => {
+		async (
+			sessionId: string | null | undefined,
+			text: string,
+		): Promise<string | null> => {
 			setError(null);
 			const controller = new AbortController();
 			abortControllerRef.current = controller;
@@ -50,7 +53,7 @@ export function useChatStream({
 			currentPartialTextRef.current = "";
 			currentAiMessageIdRef.current = null;
 
-			let currentSessionId = sessionId;
+			let currentSessionId = sessionId ?? null;
 
 			try {
 				// 1. Se ainda não há sessão (página inicial vazia), cria uma nova sessão
