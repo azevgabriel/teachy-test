@@ -13,13 +13,17 @@ describe('PrismaService', () => {
   });
 
   it('should call $connect on onModuleInit', async () => {
-    const connectSpy = vi.spyOn(service, '$connect').mockResolvedValue(undefined as never);
+    const connectSpy = vi
+      .spyOn(service, '$connect')
+      .mockResolvedValue(undefined as never);
     await service.onModuleInit();
     expect(connectSpy).toHaveBeenCalled();
   });
 
   it('should call $disconnect on onModuleDestroy', async () => {
-    const disconnectSpy = vi.spyOn(service, '$disconnect').mockResolvedValue(undefined as never);
+    const disconnectSpy = vi
+      .spyOn(service, '$disconnect')
+      .mockResolvedValue(undefined as never);
     await service.onModuleDestroy();
     expect(disconnectSpy).toHaveBeenCalled();
   });

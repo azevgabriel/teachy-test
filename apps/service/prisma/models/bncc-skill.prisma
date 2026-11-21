@@ -1,0 +1,11 @@
+model BnccSkill {
+  id                   String                @id @default(uuid())
+  code                 String                @unique
+  description          String                @db.Text
+  curricularComponents CurricularComponent[]
+  applicationYears     ApplicationYear[]
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  @@map("bncc_skills")
+}
