@@ -31,9 +31,10 @@ All developers and agents must adhere strictly to the global invariants defined 
 
 Each guideline owns a single domain. Do not duplicate rules across files:
 
-- [NESTJS.md](docs/NESTJS.md): Core NestJS conventions, module structure and testing.
-- [STREAMS.md](docs/STREAMS.md): Outbound streaming responses (LLM token chunks), `StreamableFile`, stream cancellation, and state persistence hooks.
-- [UPLOAD.md](docs/UPLOAD.md): Multipart file uploads, streaming ingestion, and validation for images (screenshots/photos), PDF, and DOCX.
+- [PRISMA.md](PRISMA.md): Prisma ORM v7 architecture, modular schema structure (`prisma/models/`), migrations, driver adapters, and seed scripts.
+- [NESTJS.md](NESTJS.md): Core NestJS conventions, module structure and testing.
+- [STREAMS.md](STREAMS.md): Outbound streaming responses (LLM token chunks), `StreamableFile`, stream cancellation, and state persistence hooks.
+- [UPLOAD.md](UPLOAD.md): Multipart file uploads, streaming ingestion, and validation for images (screenshots/photos), PDF, and DOCX.
 
 ---
 
