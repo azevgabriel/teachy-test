@@ -59,9 +59,10 @@ Este fluxo antecede qualquer escrita de código ou criação de tickets no GitHu
 ### 1. Refinamento por Domínio
 
 #### A. Quando relativo ao Back-end (`apps/service/`):
-- **Estruturação do Banco de Dados:**
-  - Seguir o invariante *Schema-First*.
-  - Mapear tabelas, campos, tipos, índices, chaves estrangeiras e relacionamentos no Prisma.
+
+- **Configuração de Infraestrutura vs. Modelagem de Negócio:**
+  - Em issues de infraestrutura inicial (setup de ORM, Docker, banco de dados), focar exclusivamente no setup técnico, sem forçar modelagem antecipada de domínio.
+  - Quando a demanda for de funcionalidade de negócio: seguir o invariante _Schema-First_, mapeando tabelas, campos, tipos e relacionamentos necessários no Prisma conforme alinhado com o usuário.
   - Planejar migrações sem impacto em dados existentes.
 - **Avaliação de Dependências Externas (npm):**
   - Verificar se módulos oficiais do NestJS já atendem à demanda (`@nestjs/storage`, `@nestjs/ai`, `@nestjs/resilience` — ver `apps/service/docs/NESTJS.md`).
@@ -71,6 +72,7 @@ Este fluxo antecede qualquer escrita de código ou criação de tickets no GitHu
   - Definir estratégias de cancelamento cooperativo com `AbortController`.
 
 #### B. Quando relativo ao Front-end (`apps/web/`):
+
 - **UI/UX & Estrutura de Telas:**
   - Definir fluxo do usuário, hierarquia visual e navegação via TanStack Router.
   - Tratar passagem de parâmetros via URL (search params tipados e busca prévia de contexto na API via `loader`).
@@ -78,12 +80,13 @@ Este fluxo antecede qualquer escrita de código ou criação de tickets no GitHu
   - Especificar componentes do **shadcn/ui** e primitivos Radix UI necessários (`Button`, `Dialog`, `Card`, `Progress`, `ScrollArea`, `Sonner`, etc.).
   - Proibir criação de elementos HTML interativos ad-hoc sem design system.
 - **Estados de Interface:**
-  - Especificar estados vazios (*empty state*), carregamento (*skeletons* via `pendingComponent`), streaming de IA (renderização progressiva com auto-scroll) e tratamento de erros (`errorComponent`).
+  - Especificar estados vazios (_empty state_), carregamento (_skeletons_ via `pendingComponent`), streaming de IA (renderização progressiva com auto-scroll) e tratamento de erros (`errorComponent`).
 - **Arquivos & Cancelamento:**
-  - Mapear zonas de drag-and-drop para materiais de apoio (validação de tipos e tamanhos) e botão de interrupção de geração (*cancel mid-flight*).
+  - Mapear zonas de drag-and-drop para materiais de apoio (validação de tipos e tamanhos) e botão de interrupção de geração (_cancel mid-flight_).
 
 ### 2. Portão de Criação da Issue (Gate 1)
-- O agente só cria a issue no repositório **após autorização verbal clara** do usuário (ex.: *"Pode criar a issue no GitHub"*).
+
+- O agente só cria a issue no repositório **após autorização verbal clara** do usuário (ex.: _"Pode criar a issue no GitHub"_).
 - **Conteúdo Obrigatório da Issue:**
   1. **Contexto & Motivação:** Explicação do problema ou valor entregue.
   2. **Arquitetura Acordada:** Decisões de design, contratos, tabelas ou componentes.
@@ -95,17 +98,19 @@ Este fluxo antecede qualquer escrita de código ou criação de tickets no GitHu
 
 ## 🛠️ Fluxo 2: Implementação & Disciplina de Contexto
 
-A implementação tem início **EXCLUSIVAMENTE** após comando explícito do usuário direcionado a uma issue existente (ex.: *"Implementar a issue #3"* ou *"Podemos implementar a #5"*).
+A implementação tem início **EXCLUSIVAMENTE** após comando explícito do usuário direcionado a uma issue existente (ex.: _"Implementar a issue #3"_ ou _"Podemos implementar a #5"_).
 
 ### Etapa 1: Imersão Obrigatória no Contexto
+
 Antes de redigir qualquer linha de código ou executar comandos de modificação, o agente deve reler o ponto de entrada da aplicação afetada:
 
-| Aplicação | Entry Point Principal | Subdocumentos de Referência |
-| :--- | :--- | :--- |
-| `apps/web/` | [`apps/web/docs/GLOBAL.md`](../apps/web/docs/GLOBAL.md) | `ROUTER.md`, `SHADCN.md`, `MCP.md`, `STREAMING.md` |
-| `apps/service/` | [`apps/service/docs/GLOBAL.md`](../apps/service/docs/GLOBAL.md) | `NESTJS.md`, `STEAMS.md`, `UPLOAD.md`, `skills/` |
+| Aplicação       | Entry Point Principal                                           | Subdocumentos de Referência                        |
+| :-------------- | :-------------------------------------------------------------- | :------------------------------------------------- |
+| `apps/web/`     | [`apps/web/docs/GLOBAL.md`](../apps/web/docs/GLOBAL.md)         | `ROUTER.md`, `SHADCN.md`, `MCP.md`, `STREAMING.md` |
+| `apps/service/` | [`apps/service/docs/GLOBAL.md`](../apps/service/docs/GLOBAL.md) | `NESTJS.md`, `STEAMS.md`, `UPLOAD.md`, `skills/`   |
 
 ### Etapa 2: Branch Dedicada
+
 - Nunca commitar diretamente na branch `main`.
 - Criar a branch de trabalho a partir da `main` seguindo a convenção:
   - `feat/<id>` para novas funcionalidades
@@ -113,15 +118,18 @@ Antes de redigir qualquer linha de código ou executar comandos de modificação
   - `refactor/<id>` para refatorações estruturais
 
 ### Etapa 3: Desenvolvimento Focado
+
 - Implementar respeitando a arquitetura definida na issue e os padrões do framework correspondente (ESM, DI no NestJS, TanStack Router no web, etc.).
 - Proibido expandir o escopo ou realizar alterações não acordadas.
 
 ### Etapa 4: Validação & Testes
+
 - Executar verificações de formatação e linting (`npm run check` no `apps/web`; linters e formatadores no `apps/service`).
 - Rodar suítes de testes automatizados locais para garantir ausência de regressões.
 - Verificar o checklist da issue para atestar que 100% dos critérios de aceite foram cobertos.
 
 ### Etapa 5: Portão de Revisão Colaborativa (Gate 2 — PARADA OBRIGATÓRIA)
+
 > [!CAUTION]
 > **Proibido Commitar/Push Autônomo:** Mesmo com código pronto e testes verdes, o agente **NUNCA** faz commit ou push por conta própria.
 
@@ -129,12 +137,14 @@ Antes de redigir qualquer linha de código ou executar comandos de modificação
 - Aguardar inspeção e manifestação do usuário.
 
 ### Etapa 6: Commit & Push Autorizado (Gate 3)
-- Realizado unicamente após o usuário confirmar a aprovação do pacote (ex.: *"Finalizado esse pacote de código"* ou *"Pode commitar"*).
+
+- Realizado unicamente após o usuário confirmar a aprovação do pacote (ex.: _"Finalizado esse pacote de código"_ ou _"Pode commitar"_).
 - Seguir o padrão **Conventional Commits** (`feat: ...`, `fix: ...`, `refactor: ...`).
 - Fazer o push da branch dedicada para o repositório remoto.
 
 ### Etapa 7: Abertura do Pull Request (Gate 4)
-- A abertura de PR requer nova instrução direta do usuário (ex.: *"Agora podemos subir o PR"*).
+
+- A abertura de PR requer nova instrução direta do usuário (ex.: _"Agora podemos subir o PR"_).
 - O PR deve incluir na descrição o fechamento automático da issue relacionada (`Resolves #<id>`).
 - Quando o PR for mesclado na `main`, a issue é automaticamente fechada pelo GitHub e a branch de trabalho pode ser limpa.
 
@@ -142,11 +152,11 @@ Antes de redigir qualquer linha de código ou executar comandos de modificação
 
 ## 🚦 Matriz de Portões de Aprovação Humana
 
-| Ação Pretendida | A IA pode fazer sozinha? | Gatilho Necessário | Comportamento Obrigatório da IA |
-| :--- | :---: | :--- | :--- |
-| **Propor arquitetura / debater** | ✅ Sim | Usuário traz nova ideia ou necessidade | Discutir no chat, comparar alternativas, analisar libs e schemas. |
-| **Criar Issue no GitHub** | ❌ **Não** | *"Pode criar a issue no GitHub"* | Criar issue detalhada e **parar imediatamente**. |
-| **Iniciar Implementação** | ❌ **Não** | *"Implementar a issue #<id>"* | Ler os docs locais, criar branch dedicada e codificar. |
-| **Gerar Commit & Push** | ❌ **Não** | *"Finalizado esse pacote de código"* | Exibir diffs, parar para revisão e só commitar após o sinal. |
-| **Abrir Pull Request** | ❌ **Não** | *"Agora podemos subir o PR"* | Abrir PR apontando `Resolves #<id>`. |
-| **Fechar Issue / Merge** | ❌ **Não** | Ação humana no GitHub | O ciclo encerra automaticamente após o merge do PR. |
+| Ação Pretendida                  | A IA pode fazer sozinha? | Gatilho Necessário                     | Comportamento Obrigatório da IA                                   |
+| :------------------------------- | :----------------------: | :------------------------------------- | :---------------------------------------------------------------- |
+| **Propor arquitetura / debater** |          ✅ Sim          | Usuário traz nova ideia ou necessidade | Discutir no chat, comparar alternativas, analisar libs e schemas. |
+| **Criar Issue no GitHub**        |        ❌ **Não**        | _"Pode criar a issue no GitHub"_       | Criar issue detalhada e **parar imediatamente**.                  |
+| **Iniciar Implementação**        |        ❌ **Não**        | _"Implementar a issue #<id>"_          | Ler os docs locais, criar branch dedicada e codificar.            |
+| **Gerar Commit & Push**          |        ❌ **Não**        | _"Finalizado esse pacote de código"_   | Exibir diffs, parar para revisão e só commitar após o sinal.      |
+| **Abrir Pull Request**           |        ❌ **Não**        | _"Agora podemos subir o PR"_           | Abrir PR apontando `Resolves #<id>`.                              |
+| **Fechar Issue / Merge**         |        ❌ **Não**        | Ação humana no GitHub                  | O ciclo encerra automaticamente após o merge do PR.               |
