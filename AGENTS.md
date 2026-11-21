@@ -7,8 +7,9 @@ This document defines the core invariants, operating workflows, and context boun
 ## 🛡️ Always
 
 1. **Strict Context Grounding:** Before creating code or proposing architecture, agents must anchor themselves in the target domain's documentation (`apps/web/docs/` or `apps/service/docs/`). Never mix patterns between applications.
-2. **GitHub & Git Execution Boundaries:** Follow [docs/GITHUB.md](docs/GITHUB.md) strictly. Autonomous issue creation, direct commits to `main`, autonomous pushes, and automated PR creations are strictly prohibited.
+2. **GitHub & Git Execution Boundaries:** Follow [docs/GITHUB.md](docs/GITHUB.md) strictly. Autonomous actions without confirmation (unauthorized issue creation, direct commits to `main`, unapproved pushes, unrequested PRs) are strictly prohibited. However, **upon receiving explicit user confirmation** (e.g., `"pode criar a issue"`, `"agora podemos subir o PR"`), Antigravity is fully authorized, capable, and responsible for creating the issue and the Pull Request itself directly (via MCP or GitHub API) without requiring manual creation by the user.
 3. **Decoupled Workflows & Human Gates:** Follow [docs/WORKFLOW.md](docs/WORKFLOW.md) strictly. The Decision-Making Workflow (interactive issue framing) and the Implementation Workflow (coding against an authorized issue) are strictly separated. One never automatically triggers the other.
+4. **Zero Credential Exposure:** Never expose or hardcode credentials (passwords, connection strings, API keys, tokens) in source code, test files, Docker configurations, or documentation (`.md`). Credentials must always reside in `.env` files (with sanitized templates in `.env.example`) and be injected dynamically into tests, the application runtime, or Docker containers via environment variables.
 
 ---
 

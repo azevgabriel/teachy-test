@@ -134,8 +134,8 @@ Antes de redigir qualquer linha de código ou executar comandos de modificação
 - Fazer o push da branch dedicada para o repositório remoto.
 
 ### Etapa 7: Abertura do Pull Request (Gate 4)
-- A abertura de PR requer nova instrução direta do usuário (ex.: *"Agora podemos subir o PR"*).
-- O PR deve incluir na descrição o fechamento automático da issue relacionada (`Resolves #<id>`).
+- A abertura de PR requer confirmação explícita do usuário (ex.: *"Agora podemos subir o PR"* ou *"Criar PR"*).
+- **Execução Direta pelo Antigravity:** Ao receber a confirmação explícita, o próprio Antigravity é responsável por criar o Pull Request diretamente no GitHub (via MCP ou GitHub API) com título, contexto, checklist e `Resolves #<id>`, sem exigir abertura manual pelo usuário.
 - Quando o PR for mesclado na `main`, a issue é automaticamente fechada pelo GitHub e a branch de trabalho pode ser limpa.
 
 ---
@@ -145,8 +145,8 @@ Antes de redigir qualquer linha de código ou executar comandos de modificação
 | Ação Pretendida | A IA pode fazer sozinha? | Gatilho Necessário | Comportamento Obrigatório da IA |
 | :--- | :---: | :--- | :--- |
 | **Propor arquitetura / debater** | ✅ Sim | Usuário traz nova ideia ou necessidade | Discutir no chat, comparar alternativas, analisar libs e schemas. |
-| **Criar Issue no GitHub** | ❌ **Não** | *"Pode criar a issue no GitHub"* | Criar issue detalhada e **parar imediatamente**. |
-| **Iniciar Implementação** | ❌ **Não** | *"Implementar a issue #<id>"* | Ler os docs locais, criar branch dedicada e codificar. |
-| **Gerar Commit & Push** | ❌ **Não** | *"Finalizado esse pacote de código"* | Exibir diffs, parar para revisão e só commitar após o sinal. |
-| **Abrir Pull Request** | ❌ **Não** | *"Agora podemos subir o PR"* | Abrir PR apontando `Resolves #<id>`. |
+| **Criar Issue no GitHub** | ❌ Sem confirmação | *"Pode criar a issue no GitHub"* | **Antigravity cria a issue diretamente** e para para aguardar o comando de implementação. |
+| **Iniciar Implementação** | ❌ Sem confirmação | *"Implementar a issue #<id>"* | Ler os docs locais, criar branch dedicada e codificar. |
+| **Gerar Commit & Push** | ❌ Sem confirmação | *"Finalizado esse pacote de código"* | Exibir diffs, parar para revisão e só commitar após o sinal. |
+| **Abrir Pull Request** | ❌ Sem confirmação | *"Agora podemos subir o PR"* ou *"Criar PR"* | **Antigravity cria o PR diretamente** apontando `Resolves #<id>`. |
 | **Fechar Issue / Merge** | ❌ **Não** | Ação humana no GitHub | O ciclo encerra automaticamente após o merge do PR. |
