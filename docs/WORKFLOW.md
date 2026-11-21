@@ -84,6 +84,7 @@ Este fluxo antecede qualquer escrita de código ou criação de tickets no GitHu
 
 ### 2. Portão de Criação da Issue (Gate 1)
 - O agente só cria a issue no repositório **após autorização verbal clara** do usuário (ex.: *"Pode criar a issue no GitHub"*).
+- **Proibição de Delegação para Card Interativo:** O agente **NUNCA** deve instruir o usuário a *"localizar o card interativo e clicar em Submit"*. Se a chamada via MCP exigir confirmação visual ou renderizar um widget, o agente deve efetuar a criação diretamente via GitHub REST API com o token já configurado, informando em seguida o link da issue criada.
 - **Conteúdo Obrigatório da Issue:**
   1. **Contexto & Motivação:** Explicação do problema ou valor entregue.
   2. **Arquitetura Acordada:** Decisões de design, contratos, tabelas ou componentes.
@@ -135,7 +136,7 @@ Antes de redigir qualquer linha de código ou executar comandos de modificação
 
 ### Etapa 7: Abertura do Pull Request (Gate 4)
 - A abertura de PR requer confirmação explícita do usuário (ex.: *"Agora podemos subir o PR"* ou *"Criar PR"*).
-- **Execução Direta pelo Antigravity:** Ao receber a confirmação explícita, o próprio Antigravity é responsável por criar o Pull Request diretamente no GitHub (via MCP ou GitHub API) com título, contexto, checklist e `Resolves #<id>`, sem exigir abertura manual pelo usuário.
+- **Execução Direta pelo Antigravity:** Ao receber a confirmação explícita, o próprio Antigravity é responsável por criar o Pull Request diretamente no GitHub (via MCP ou GitHub API) com título, contexto, checklist e `Resolves #<id>`, sem exigir abertura manual pelo usuário e sem pedir para o usuário localizar ou clicar em cards/formulários interativos (caso o MCP renderize widget ou pause, efetuar a criação diretamente via REST API).
 - Quando o PR for mesclado na `main`, a issue é automaticamente fechada pelo GitHub e a branch de trabalho pode ser limpa.
 
 ---

@@ -20,6 +20,10 @@ When interacting with Git, GitHub APIs, or the GitHub Model Context Protocol (MC
 - **User-Gated Pull Request (PR) Creation:**
   - Creating a Pull Request requires explicit user authorization.
   - Upon receiving an explicit command (e.g., `"agora podemos subir o PR"` or `"Criar PR"`), **Antigravity itself directly creates the Pull Request** on GitHub (using MCP or GitHub API), linking the issue with `Resolves #<id>`, without deflecting or requiring the user to create it manually.
+- **Zero Interactive Card / Manual Form Delegation:**
+  - The agent must **NEVER** instruct the user to *"locate the interactive card that appeared above and click Submit / Confirm / Create"* (`"Localize o card interativo que apareceu acima da mensagem e clique no botão 'Submit'"`).
+  - If the GitHub MCP server renders an interactive widget or returns a pause asking for user submission, the agent must immediately fallback to creating the Issue or Pull Request directly via the GitHub REST API (using the GitHub token configured in `mcp_config.json` or environment).
+  - The creation must happen seamlessly without forcing the user to interact with UI forms or cards.
 - **No Autonomous Writes or Deletions:** The agent must never close issues, merge code, or delete branches/resources autonomously without direct user authorization.
 
 ---
