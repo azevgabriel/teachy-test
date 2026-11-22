@@ -58,9 +58,132 @@ function estimateHeaderCost(
 		: [];
 
 	const isLandscape = orientation === "landscape";
-	let cost = isLandscape ? 110 : 125;
 
-	// Habilidades BNCC Gerais (Macro) - respeita isVisible
+	// 1. Top Header institucional (Título + subtítulo opcional de ano/etapa)
+	const yearSpec = specifications.find(
+		(s) =>
+			s.tableRef === "PLANNING" &&
+			["applicationyear", "ano", "etapa", "serie", "turma"].includes(
+				s.colName.toLowerCase(),
+			),
+	);
+	const showYear =
+		Boolean(planning.applicationYear?.name) &&
+		(yearSpec ? yearSpec.isVisible !== false : true);
+
+	let cost = 42;
+	if (showYear) {
+		cost += 16;
+	}
+
+	// 2. Grid de Metadados Institucionais (Componente, Ano, Escola, Período + dinâmicos curtos)
+	const componentSpec = specifications.find(
+		(s) =>
+			s.tableRef === "PLANNING" &&
+			["curricularcomponents", "componente", "disciplina", "materia"].includes(
+				s.colName.toLowerCase(),
+			),
+	);
+	const showComponent =
+		(planning.curricularComponents?.length || 0) > 0 &&
+		(componentSpec ? componentSpec.isVisible !== false : true);
+
+	const schoolSpec = specifications.find(
+		(s) =>
+			s.tableRef === "PLANNING" &&
+			["school", "escola", "instituicao", "rede"].includes(
+				s.colName.toLowerCase(),
+			),
+	);
+	const showSchool =
+		Boolean(planning.school?.name) &&
+		(schoolSpec ? schoolSpec.isVisible !== false : true);
+
+	const periodSpec = specifications.find(
+		(s) =>
+			s.tableRef === "PLANNING" &&
+			["periodo", "period", "datas", "cronograma"].includes(
+				s.colName.toLowerCase(),
+			),
+	);
+	const hasPeriod = Boolean(planning.startAt || planning.endAt);
+	const showPeriod =
+		hasPeriod && (periodSpec ? periodSpec.isVisible !== false : true);
+
+	const headerMetadata = planning.metadataValues || [];
+	const nativeColNames = [
+		"titulo",
+		"title",
+		"plano",
+		"nome",
+		"curricularcomponents",
+		"componente",
+		"disciplina",
+		"materia",
+		"applicationyear",
+		"ano",
+		"etapa",
+		"serie",
+		"turma",
+		"school",
+		"escola",
+		"instituicao",
+		"rede",
+		"startat",
+		"endat",
+		"periodo",
+		"period",
+		"datas",
+		"cronograma",
+		"learningobjectives",
+		"habilidades_bncc",
+		"bncc",
+		"habilidades",
+		"objetivos_aprendizagem",
+		"evaluations",
+		"avaliacao",
+		"avaliacoes",
+		"instrumento_avaliacao",
+		"como_avaliar",
+	];
+
+	let shortDynamicCount = 0;
+	let longDynamicCount = 0;
+
+	for (const spec of specifications) {
+		if (spec.tableRef !== "PLANNING") continue;
+		if (spec.isVisible === false) continue;
+		if (nativeColNames.includes(spec.colName.toLowerCase())) continue;
+
+		const meta = headerMetadata.find(
+			(m) =>
+				m.specificationId === spec.id ||
+				m.specification?.colName.toLowerCase() === spec.colName.toLowerCase(),
+		);
+		const val = meta?.textValue?.trim();
+		if (val) {
+			if (val.length > 50 || val.includes("\n")) {
+				longDynamicCount += 1;
+			} else {
+				shortDynamicCount += 1;
+			}
+		}
+	}
+
+	const gridItemCount =
+		(showComponent ? 1 : 0) +
+		(showYear ? 1 : 0) +
+		(showSchool ? 1 : 0) +
+		(showPeriod ? 1 : 0) +
+		shortDynamicCount;
+
+	if (gridItemCount > 0) {
+		const colsPerRow = 4;
+		const rows = Math.ceil(gridItemCount / colsPerRow);
+		cost += 20 + rows * (isLandscape ? 36 : 42);
+	}
+
+	// 3. Habilidades BNCC Gerais (Macro) - respeita isVisible
 	const bnccSpec = specifications.find(
 		(s) =>
 			s.tableRef === "PLANNING" &&
@@ -72,25 +195,15 @@ function estimateHeaderCost(
 				"objetivos_aprendizagem",
 			].includes(s.colName.toLowerCase()),
 	);
-	const showBncc = bnccSpec ? (bnccSpec.isVisible ?? true) : true;
+	const showBncc = bnccSpec ? bnccSpec.isVisible !== false : true;
 	const bnccCount = showBncc ? planning.learningObjectives?.length || 0 : 0;
 	if (bnccCount > 0) {
 		const badgesPerRow = isLandscape ? 7 : 4;
 		const bnccRows = Math.ceil(bnccCount / badgesPerRow);
-		cost += 20 + bnccRows * 22;
+		cost += 24 + bnccRows * 22;
 	}
 
-	// Metadados do Cabeçalho (tableRef === PLANNING e isVisible !== false)
-	const macroSpecs = specifications.filter(
-		(s) => s.tableRef === "PLANNING" && (s.isVisible ?? true),
-	);
-	if (macroSpecs.length > 0) {
-		const colsPerRow = isLandscape ? 3 : 2;
-		const specRows = Math.ceil(macroSpecs.length / colsPerRow);
-		cost += 15 + specRows * (isLandscape ? 35 : 42);
-	}
-
-	// Avaliações Macro do Planejamento (planning.evaluations) - respeita isVisible
+	// 4. Avaliações Macro do Planejamento (planning.evaluations) - respeita isVisible
 	const evalSpec = specifications.find(
 		(s) =>
 			s.tableRef === "PLANNING" &&
@@ -99,12 +212,18 @@ function estimateHeaderCost(
 				"avaliacao",
 				"avaliacoes",
 				"instrumento_avaliacao",
+				"como_avaliar",
 			].includes(s.colName.toLowerCase()),
 	);
-	const showEval = evalSpec ? (evalSpec.isVisible ?? true) : true;
+	const showEval = evalSpec ? evalSpec.isVisible !== false : true;
 	const evalCount = showEval ? planning.evaluations?.length || 0 : 0;
 	if (evalCount > 0) {
-		cost += 20 + evalCount * (isLandscape ? 60 : 70);
+		cost += 24 + Math.ceil(evalCount / 2) * (isLandscape ? 60 : 70);
+	}
+
+	// 5. Seções Dinâmicas de Texto Longo
+	if (longDynamicCount > 0) {
+		cost += longDynamicCount * 50;
 	}
 
 	// Margem de separação pb-3 mb-4
@@ -135,6 +254,24 @@ function estimateRowWeight(
 	const isLandscape = orientation === "landscape";
 	const basePadding = 16;
 
+	// Coluna 1: Ordem / Identificação (respeita isVisible)
+	const orderSpec = specifications.find(
+		(s) =>
+			s.tableRef === "PLANNING_BLOCK" &&
+			[
+				"order",
+				"aula",
+				"aulas",
+				"data",
+				"datas",
+				"periodo",
+				"semana",
+				"bimestre",
+				"identificacao",
+			].includes(s.colName.toLowerCase()),
+	);
+	const showOrder = orderSpec ? orderSpec.isVisible !== false : true;
+
 	// Coluna 2: Metodologia / Sequência Didática (respeita isVisible)
 	const methodologySpec = specifications.find(
 		(s) =>
@@ -142,8 +279,8 @@ function estimateRowWeight(
 			s.colName.toLowerCase() === "metodologia",
 	);
 	const showMethodology = methodologySpec
-		? (methodologySpec.isVisible ?? true)
-		: true;
+		? methodologySpec.isVisible !== false
+		: Boolean(block.metodologia?.trim());
 
 	const metLen = showMethodology ? block.metodologia?.length || 0 : 0;
 	const charsPerLineMet = isLandscape ? 40 : 25;
@@ -181,7 +318,9 @@ function estimateRowWeight(
 				"objetivos_aprendizagem",
 			].includes(s.colName.toLowerCase()),
 	);
-	const showBncc = bnccSpec ? (bnccSpec.isVisible ?? true) : true;
+	const showBncc = bnccSpec
+		? bnccSpec.isVisible !== false
+		: Boolean(block.learningObjectives && block.learningObjectives.length > 0);
 	const bnccCount = showBncc ? block.learningObjectives?.length || 0 : 0;
 	const bnccHeight = isLandscape
 		? Math.ceil(bnccCount / 2) * 20
@@ -198,17 +337,20 @@ function estimateRowWeight(
 				"instrumento_avaliacao",
 			].includes(s.colName.toLowerCase()),
 	);
-	const showEval = evalSpec ? (evalSpec.isVisible ?? true) : true;
+	const showEval = evalSpec
+		? evalSpec.isVisible !== false
+		: Boolean(block.evaluations && block.evaluations.length > 0);
 	const evalCount = showEval ? block.evaluations?.length || 0 : 0;
 	const evalHeight = evalCount * 36;
 
 	// Altura máxima entre as colunas
 	const maxContentHeight = Math.max(
+		showOrder ? 32 : 0,
 		metHeight,
 		maxMvHeight,
 		bnccHeight,
 		evalHeight,
-		32,
+		24,
 	);
 
 	return Math.round(basePadding + maxContentHeight + 8);
@@ -477,8 +619,18 @@ export function paginatePlanning(
 				"periodo",
 				"semana",
 				"bimestre",
+				"identificacao",
 			].includes(s.colName.toLowerCase()),
 	);
+
+	const methodologySpec = specifications.find(
+		(s) =>
+			s.tableRef === "PLANNING_BLOCK" &&
+			s.colName.toLowerCase() === "metodologia",
+	);
+	const showMethodology = methodologySpec
+		? methodologySpec.isVisible !== false
+		: true;
 
 	const forest = buildBlockForest(blocks);
 	const isEntirelyFlat = forest.every((node) => node.children.length === 0);
@@ -492,7 +644,8 @@ export function paginatePlanning(
 			const targetBlocks = section.blocks;
 
 			const hasBreadcrumbs = section.breadcrumbs.length > 0;
-			const hasParentMet = Boolean(section.parentBlock?.metodologia);
+			const hasParentMet =
+				showMethodology && Boolean(section.parentBlock?.metodologia);
 			const effectiveSectionTitleCost =
 				sectionTitleCost + (hasBreadcrumbs ? 14 : 0) + (hasParentMet ? 24 : 0);
 
