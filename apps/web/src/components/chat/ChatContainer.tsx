@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { FileSpreadsheet, PanelRight, Sparkles } from "lucide-react";
+import { PanelRight, Sparkles } from "lucide-react";
 import * as React from "react";
 import { PlanningViewer } from "#/components/planning/PlanningViewer";
 import { usePlanningSync } from "#/components/planning/usePlanningSync";
@@ -220,18 +220,6 @@ export function ChatContainer({
 				{/* Top Bar do Chat */}
 				<header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xs shrink-0">
 					<div className="flex items-center gap-2 truncate">
-						{!planningOpen && (
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setPlanningOpen(true)}
-								className="gap-1.5 text-xs h-8 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 hover:bg-emerald-100/60 mr-1"
-							>
-								<FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-								<span>Ver Folha A4</span>
-							</Button>
-						)}
-
 						<div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
 							T
 						</div>

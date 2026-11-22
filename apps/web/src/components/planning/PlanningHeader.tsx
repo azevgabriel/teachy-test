@@ -46,8 +46,9 @@ function formatDate(dateStr?: string | null): string {
 
 export function PlanningHeader({
 	planning,
-	specifications,
+	specifications: rawSpecs,
 }: PlanningHeaderProps) {
+	const specifications = Array.isArray(rawSpecs) ? rawSpecs : [];
 	const headerSpecs = specifications.filter((s) => s.tableRef === "PLANNING");
 	const headerMetadata = planning.metadataValues || [];
 
@@ -132,12 +133,87 @@ export function PlanningHeader({
 				? `A partir de ${formatDate(planning.startAt)}`
 				: null;
 
-	// Separa especificações dinâmicas entre curtas (cabem no grid superior) e longas (caixas de texto descritivo)
-	const dynamicHeaderItems: Array<{
+	interface HeaderGridItem {
 		id: string;
+		key: string;
 		label: string;
+		value: React.ReactNode;
+		icon?: React.ReactNode;
+		order: number;
+	}
+
+	interface HeaderMacroSection {
+		id: string;
+		order: number;
+		content: React.ReactNode;
+	}
+
+	const gridItems: HeaderGridItem[] = [];
+
+	// 1. Componentes Curriculares
+	const showComponent =
+		(planning.curricularComponents?.length || 0) > 0 &&
+		(componentSpec ? (componentSpec.isVisible ?? true) : true);
+	if (showComponent) {
+		gridItems.push({
+			id: "header-component",
+			key: "curricularcomponents",
+			label:
+				componentSpec?.customLabel || componentSpec?.colName || "Componente",
+			value: planning.curricularComponents?.map((c) => c.name).join(", "),
+			icon: <BookOpen className="h-2.5 w-2.5 text-emerald-700" />,
+			order: componentSpec?.order ?? 0,
+		});
+	}
+
+	// 2. Ano / Etapa de Aplicação
+	const showYear =
+		Boolean(planning.applicationYear?.name) &&
+		(yearSpec ? (yearSpec.isVisible ?? true) : true);
+	if (showYear) {
+		gridItems.push({
+			id: "header-year",
+			key: "applicationyear",
+			label: yearSpec?.customLabel || yearSpec?.colName || "Ano / Etapa",
+			value: planning.applicationYear?.name,
+			icon: <GraduationCap className="h-2.5 w-2.5 text-emerald-700" />,
+			order: yearSpec?.order ?? 1,
+		});
+	}
+
+	// 3. Escola / Instituição
+	const showSchool =
+		Boolean(planning.school?.name) &&
+		(schoolSpec ? (schoolSpec.isVisible ?? true) : true);
+	if (showSchool) {
+		gridItems.push({
+			id: "header-school",
+			key: "school",
+			label: schoolSpec?.customLabel || schoolSpec?.colName || "Escola",
+			value: planning.school?.name,
+			icon: <SchoolIcon className="h-2.5 w-2.5 text-slate-600" />,
+			order: schoolSpec?.order ?? 2,
+		});
+	}
+
+	// 4. Período / Cronograma
+	const showPeriod =
+		Boolean(periodText) && (periodSpec ? (periodSpec.isVisible ?? true) : true);
+	if (showPeriod) {
+		gridItems.push({
+			id: "header-period",
+			key: "periodo",
+			label: periodSpec?.customLabel || periodSpec?.colName || "Período",
+			value: periodText,
+			icon: <Calendar className="h-2.5 w-2.5 text-slate-600" />,
+			order: periodSpec?.order ?? 3,
+		});
+	}
+
+	// 5. Itens Dinâmicos EAV de Cabeçalho (tableRef === PLANNING)
+	const longDynamicItems: Array<{
+		spec: Specification;
 		value: string;
-		isLong: boolean;
 	}> = [];
 
 	for (const spec of headerSpecs) {
@@ -160,175 +236,99 @@ export function PlanningHeader({
 		].includes(spec.colName.toLowerCase());
 
 		if (isNativeOverride) continue;
+		if (spec.isVisible === false) continue;
 
 		const meta = headerMetadata.find(
 			(m) =>
 				m.specificationId === spec.id ||
-				m.specification?.colName === spec.colName,
+				m.specification?.colName.toLowerCase() === spec.colName.toLowerCase(),
 		);
-		const value = meta?.textValue?.trim();
-		if (value) {
-			dynamicHeaderItems.push({
-				id: spec.id,
-				label: spec.customLabel || spec.colName,
-				value,
-				isLong: value.length > 50 || value.includes("\n"),
-			});
+		const val = meta?.textValue?.trim();
+		if (val) {
+			const isLong = val.length > 50 || val.includes("\n");
+			if (isLong) {
+				longDynamicItems.push({ spec, value: val });
+			} else {
+				gridItems.push({
+					id: `header-spec-${spec.id}`,
+					key: spec.colName,
+					label: spec.customLabel || spec.colName,
+					value: val,
+					order: spec.order ?? 4,
+				});
+			}
 		}
 	}
 
-	const shortDynamicItems = dynamicHeaderItems.filter((i) => !i.isLong);
-	const longDynamicItems = dynamicHeaderItems.filter((i) => i.isLong);
+	// Ordenação dinâmica do grid superior com base estritamente em spec.order
+	gridItems.sort((a, b) => a.order - b.order);
 
-	const hasComponents = (planning.curricularComponents?.length || 0) > 0;
-	const hasYear = Boolean(planning.applicationYear?.name);
-	const hasSchool = Boolean(planning.school?.name);
-	const hasPeriod = Boolean(periodText);
+	// Montagem das Seções Macro inferiores (BNCC, Avaliações e Textos Longos) respeitando spec.order
+	const macroSections: HeaderMacroSection[] = [];
 
-	const gridItemsCount =
-		(hasComponents ? 1 : 0) +
-		(hasYear ? 1 : 0) +
-		(hasSchool ? 1 : 0) +
-		(hasPeriod ? 1 : 0) +
-		shortDynamicItems.length;
-
+	const showBncc =
+		Boolean(
+			planning.learningObjectives && planning.learningObjectives.length > 0,
+		) && (bnccHeaderSpec ? (bnccHeaderSpec.isVisible ?? true) : true);
 	const bnccHeaderLabel =
 		bnccHeaderSpec?.customLabel ||
 		bnccHeaderSpec?.colName ||
 		"Habilidades BNCC";
 
+	if (showBncc) {
+		macroSections.push({
+			id: "macro-bncc",
+			order: bnccHeaderSpec?.order ?? 10,
+			content: (
+				<div className="mt-3 pt-2.5 border-t border-slate-200">
+					<div className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+						<Sparkles className="h-2.5 w-2.5 text-amber-600" />
+						{bnccHeaderLabel}
+					</div>
+					<div className="flex flex-wrap gap-1">
+						{planning.learningObjectives?.map((obj) => {
+							const code = obj.bnccSkill?.code || "BNCC";
+							const desc =
+								obj.customDescription ||
+								obj.bnccSkill?.description ||
+								"Habilidade associada ao planejamento";
+
+							return (
+								<span
+									key={obj.id}
+									title={desc}
+									className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-300 text-amber-950 text-[10px] font-mono font-bold cursor-help hover:bg-amber-100 transition-colors"
+								>
+									<span>{code}</span>
+								</span>
+							);
+						})}
+					</div>
+				</div>
+			),
+		});
+	}
+
+	const showEval =
+		Boolean(planning.evaluations && planning.evaluations.length > 0) &&
+		(evalHeaderSpec ? (evalHeaderSpec.isVisible ?? true) : true);
 	const evalHeaderLabel =
 		evalHeaderSpec?.customLabel ||
 		evalHeaderSpec?.colName ||
 		"Avaliação da Aprendizagem";
 
-	return (
-		<div className="border-b-2 border-slate-800 pb-3 mb-4 text-slate-900">
-			{/* Top Header Institucional estilo Documento A4 */}
-			<div className="flex items-start justify-between border-b border-slate-300 pb-2 mb-3">
-				<div>
-					<h2 className="text-sm font-extrabold uppercase tracking-wide text-slate-950 font-serif">
-						{documentTitle}
-					</h2>
-					{documentSubtitle && (
-						<p className="text-[11px] text-slate-600 mt-0.5">
-							{documentSubtitle}
-						</p>
-					)}
-				</div>
-				{planning.granularity && (
-					<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-800">
-						<Layers className="h-2.5 w-2.5 text-slate-700" />
-						{formatGranularity(planning.granularity)}
-					</span>
-				)}
-			</div>
-
-			{/* Grid Dinâmico de Metadados: apenas campos informados ou com especificações */}
-			{gridItemsCount > 0 && (
-				<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50/90 p-2.5 rounded-xs border border-slate-200 text-[11px]">
-					{hasComponents && (
-						<div>
-							<span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1">
-								<BookOpen className="h-2.5 w-2.5 text-emerald-700" />
-								{componentSpec?.customLabel ||
-									componentSpec?.colName ||
-									"Componente"}
-							</span>
-							<span className="font-semibold text-slate-900 leading-tight block">
-								{planning.curricularComponents?.map((c) => c.name).join(", ")}
-							</span>
-						</div>
-					)}
-
-					{hasYear && (
-						<div>
-							<span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1">
-								<GraduationCap className="h-2.5 w-2.5 text-emerald-700" />
-								{yearSpec?.customLabel || yearSpec?.colName || "Ano / Etapa"}
-							</span>
-							<span className="font-semibold text-slate-900 leading-tight block">
-								{planning.applicationYear?.name}
-							</span>
-						</div>
-					)}
-
-					{hasSchool && (
-						<div>
-							<span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1">
-								<SchoolIcon className="h-2.5 w-2.5 text-slate-600" />
-								{schoolSpec?.customLabel || schoolSpec?.colName || "Escola"}
-							</span>
-							<span className="font-semibold text-slate-900 truncate block leading-tight">
-								{planning.school?.name}
-							</span>
-						</div>
-					)}
-
-					{hasPeriod && (
-						<div>
-							<span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1">
-								<Calendar className="h-2.5 w-2.5 text-slate-600" />
-								{periodSpec?.customLabel || periodSpec?.colName || "Período"}
-							</span>
-							<span className="font-semibold text-slate-900 leading-tight block">
-								{periodText}
-							</span>
-						</div>
-					)}
-
-					{shortDynamicItems.map((item) => (
-						<div key={item.id}>
-							<span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">
-								{item.label}
-							</span>
-							<span className="font-semibold text-slate-900 leading-tight block">
-								{item.value}
-							</span>
-						</div>
-					))}
-				</div>
-			)}
-
-			{/* Habilidades BNCC do Ciclo Macro (nome extraído da especificação ou da coluna de planning) */}
-			{planning.learningObjectives &&
-				planning.learningObjectives.length > 0 && (
-					<div className="mt-3 pt-2.5 border-t border-slate-200">
-						<div className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-							<Sparkles className="h-2.5 w-2.5 text-amber-600" />
-							{bnccHeaderLabel}
-						</div>
-						<div className="flex flex-wrap gap-1">
-							{planning.learningObjectives.map((obj) => {
-								const code = obj.bnccSkill?.code || "BNCC";
-								const desc =
-									obj.customDescription ||
-									obj.bnccSkill?.description ||
-									"Habilidade associada ao planejamento";
-
-								return (
-									<span
-										key={obj.id}
-										title={desc}
-										className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-300 text-amber-950 text-[10px] font-mono font-bold cursor-help hover:bg-amber-100 transition-colors"
-									>
-										<span>{code}</span>
-									</span>
-								);
-							})}
-						</div>
-					</div>
-				)}
-
-			{/* Avaliações Associadas ao Macro Planejamento (Planning) */}
-			{planning.evaluations && planning.evaluations.length > 0 && (
+	if (showEval) {
+		macroSections.push({
+			id: "macro-evaluations",
+			order: evalHeaderSpec?.order ?? 11,
+			content: (
 				<div className="mt-2.5 pt-2 border-t border-slate-200">
 					<div className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
 						<CheckCircle2 className="h-2.5 w-2.5 text-emerald-700" />
 						{evalHeaderLabel}
 					</div>
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-						{planning.evaluations.map((ev) => (
+						{planning.evaluations?.map((ev) => (
 							<div
 								key={ev.id}
 								className="p-2 rounded bg-slate-50 border border-slate-200 text-[10px]"
@@ -357,26 +357,76 @@ export function PlanningHeader({
 						))}
 					</div>
 				</div>
-			)}
+			),
+		});
+	}
 
-			{/* Metadados Customizados do Cabeçalho com Texto Longo/Formatado */}
-			{longDynamicItems.length > 0 && (
-				<div className="mt-2.5 pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
-					{longDynamicItems.map((item) => (
-						<div
-							key={item.id}
-							className="p-2 rounded bg-slate-50 border border-slate-200 text-[10px]"
-						>
-							<span className="font-bold text-slate-800 block mb-1">
-								{item.label}:
+	// Seções de texto longo ordenadas dinamicamente
+	for (const item of longDynamicItems) {
+		macroSections.push({
+			id: `macro-long-${item.spec.id}`,
+			order: item.spec.order ?? 12,
+			content: (
+				<div className="mt-2.5 pt-2 border-t border-slate-200">
+					<div className="p-2 rounded bg-slate-50 border border-slate-200 text-[10px]">
+						<span className="font-bold text-slate-800 block mb-1">
+							{item.spec.customLabel || item.spec.colName}:
+						</span>
+						<span className="text-slate-700 leading-snug block whitespace-pre-wrap">
+							{item.value}
+						</span>
+					</div>
+				</div>
+			),
+		});
+	}
+
+	// Ordena seções macro pelo spec.order
+	macroSections.sort((a, b) => a.order - b.order);
+
+	return (
+		<div className="border-b-2 border-slate-800 pb-3 mb-4 text-slate-900">
+			{/* Top Header Institucional estilo Documento A4 */}
+			<div className="flex items-start justify-between border-b border-slate-300 pb-2 mb-3">
+				<div>
+					<h2 className="text-sm font-extrabold uppercase tracking-wide text-slate-950 font-serif">
+						{documentTitle}
+					</h2>
+					{documentSubtitle && (
+						<p className="text-[11px] text-slate-600 mt-0.5">
+							{documentSubtitle}
+						</p>
+					)}
+				</div>
+				{planning.granularity && (
+					<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-800">
+						<Layers className="h-2.5 w-2.5 text-slate-700" />
+						{formatGranularity(planning.granularity)}
+					</span>
+				)}
+			</div>
+
+			{/* Grid Dinâmico de Metadados: reordenável de acordo com spec.order */}
+			{gridItems.length > 0 && (
+				<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50/90 p-2.5 rounded-xs border border-slate-200 text-[11px]">
+					{gridItems.map((item) => (
+						<div key={item.id}>
+							<span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1">
+								{item.icon}
+								<span>{item.label}</span>
 							</span>
-							<span className="text-slate-700 leading-snug block whitespace-pre-wrap">
+							<span className="font-semibold text-slate-900 leading-tight block truncate">
 								{item.value}
 							</span>
 						</div>
 					))}
 				</div>
 			)}
+
+			{/* Seções Macro Inferiores Ordenadas Dinamicamente (BNCC, Avaliações, Textos Longos) */}
+			{macroSections.map((section) => (
+				<div key={section.id}>{section.content}</div>
+			))}
 		</div>
 	);
 }

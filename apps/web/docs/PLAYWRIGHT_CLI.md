@@ -43,11 +43,11 @@ playwright-cli resize 794 1123
 
 ### 2. Deterministic Height & Overflow Guardrail (`scrollHeight`)
 
-Every single A4 sheet (`.a4-sheet`) rendered in the DOM must strictly respect the vertical boundary of an A4 sheet (`scrollHeight <= 1125px`).
+Every single A4 sheet (`.a4-sheet`) rendered in the DOM must strictly respect the vertical boundary of an A4 sheet (`scrollHeight <= 1125px` in Portrait, `<= 796px` in Landscape).
 
 Run this verification check:
 ```bash
-playwright-cli eval "Array.from(document.querySelectorAll('.a4-sheet')).map((el) => ({ page: el.getAttribute('data-page-number'), scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, hasOverflow: el.scrollHeight > 1125 }))"
+playwright-cli eval "Array.from(document.querySelectorAll('.a4-sheet')).map((el) => ({ page: el.getAttribute('data-page-number'), orientation: el.getAttribute('data-orientation') || 'portrait', scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, hasOverflow: el.scrollHeight > el.clientHeight + 4 }))"
 ```
 
 > [!CAUTION]
@@ -55,7 +55,55 @@ playwright-cli eval "Array.from(document.querySelectorAll('.a4-sheet')).map((el)
 
 ---
 
-### 3. Table Continuity & Header Repetition Verification
+### 3. Blank Void Elimination & Vertical Density Guardrail (Preenchimento de Lacunas em Branco)
+
+In educational document design, an A4 page must look intentional, dense, and complete. Sheets must **never exhibit jarring, abandoned white voids** at the bottom while simultaneously **strictly respecting physical sheet boundaries** (`scrollHeight <= 1125px` in Portrait, `<= 796px` in Landscape).
+
+#### 🛡️ The Dual Boundary Invariant:
+1. **Upper Bound (Zero Overflow):** No element or margin may push `scrollHeight` beyond the A4 printable boundary (`scrollHeight <= clientHeight`).
+2. **Lower Bound (Zero Premature Voids):** All intermediate sheets ($1 \dots N-1$) must be packed completely up to their margin boundaries (`scrollHeight <= clientHeight`). A page is **only** permitted to advance / break to the subsequent sheet when the next row physically cannot fit within the remaining printable height. The final sheet ($N$) receives the remaining rows and is naturally permitted to have trailing whitespace at the bottom.
+
+#### 📐 Architectural Strategies for Blank Gap Completion:
+- **A. Dynamic DOM Container Measurement (`PlanningViewer.tsx` & `paginatePlanning.ts`):** An offscreen measurement harness renders the real A4 sheet container, macro header, table head, and all block `<tr>` rows with exact CSS pixel widths. `useLayoutEffect` measures exact bounding boxes (`headerHeight`, `tableHeaderHeight`, `tableContainerMargin`, and `rowHeights[id]`). The pagination algorithm uses exact pixel dimensions rather than speculative static height guesses, guaranteeing maximum physical density per sheet.
+- **B. Strict Margin-Bounded Packing (`paginatePlanning.ts`):** Every row is packed into the current sheet while `currentBudget >= rowWeight`. Intermediate pages advance only when `rowWeight > currentBudget`. Premature multi-page breaks are eliminated.
+- **C. Vertical Flex Distribution & Footer Anchoring:** The `.a4-sheet` container enforces `flex flex-col justify-between`. The content wrapper (`flex-1 flex flex-col`) absorbs available vertical space and ensures that `.a4-sheet-footer` is always anchored flush at the bottom margin of the A4 boundary, eliminating floating footers and gaps beneath the page.
+- **D. Natural Final Sheet Termination:** The final sheet ($N$) cleanly finishes the remaining items with zero artificial dummy filler rows or forced expansions. White space at the bottom of the final sheet is expected and pedagogical.
+
+#### 🧪 Playwright CLI Audit Check for Void & Density Verification:
+Run this verification check to evaluate vertical utilization and catch premature voids across all sheets:
+
+```bash
+playwright-cli eval '() => {
+  return Array.from(document.querySelectorAll(".a4-sheet")).map((sheet, idx, all) => {
+    const contentEl = sheet.querySelector(".flex-1");
+    const contentHeight = contentEl ? contentEl.scrollHeight : sheet.scrollHeight;
+    const availableHeight = sheet.clientHeight - 48; // deducting footer and page margins
+    const utilization = Math.min(100, Math.round((contentHeight / availableHeight) * 100));
+    const isIntermediate = idx < all.length - 1;
+    const isPrematureBreak = isIntermediate && utilization < 75;
+    const hasOverflow = sheet.scrollHeight > sheet.clientHeight + 4;
+    return {
+      page: parseInt(sheet.getAttribute("data-page-number") || String(idx + 1)),
+      orientation: sheet.getAttribute("data-orientation") || "portrait",
+      scrollHeight: sheet.scrollHeight,
+      clientHeight: sheet.clientHeight,
+      utilization: utilization + "%",
+      hasOverflow,
+      hasPrematureVoid: isPrematureBreak,
+      status: hasOverflow ? "❌ OVERFLOW" : isPrematureBreak ? "⚠️ UNFILLED VOID" : "✅ OPTIMAL"
+    };
+  });
+}'
+```
+
+#### Expected Pass Criteria:
+- `hasOverflow: false` for all sheets.
+- `hasPrematureVoid: false` (`status: "✅ OPTIMAL"`) for all intermediate sheets (`page < totalPages`).
+- Final sheet exhibits balanced vertical anchoring with footer flush at the bottom.
+
+---
+
+### 4. Table Continuity & Header Repetition Verification
 
 When a macro pedagogical unit (e.g. *Mês 1* or *Semana 2*) spans across multiple pages, the continued page must never orphan the table structure:
 
@@ -70,7 +118,7 @@ playwright-cli eval "Array.from(document.querySelectorAll('.a4-sheet')).map((she
 
 ---
 
-### 4. High-Contrast White Paper Legibility (WCAG Audit)
+### 5. High-Contrast White Paper Legibility (WCAG Audit)
 
 All colors used inside `.a4-sheet` must guarantee crisp legibility on white paper (`#ffffff`) for physical printing and PDF export:
 
@@ -84,7 +132,7 @@ All colors used inside `.a4-sheet` must guarantee crisp legibility on white pape
 
 ---
 
-### 5. Running Header & Footer Sequence (`Folha X de Y`)
+### 6. Running Header & Footer Sequence (`Folha X de Y`)
 
 The bottom of every `.a4-sheet` contains an authoritative running footer (`.a4-sheet-footer`) verifying total page count:
 
@@ -102,7 +150,7 @@ Expected output sample:
 
 ---
 
-### 6. Split-View & Independent Scroll Verification
+### 7. Split-View & Independent Scroll Verification
 
 In desktop mode, verify that the left panel (`PlanningViewer`) and right panel (`ChatContainer`) maintain isolated scrolling:
 
@@ -117,7 +165,7 @@ playwright-cli eval "document.querySelector('aside .overflow-y-auto').scrollTop"
 
 ---
 
-### 7. Real Artifact Captures (Visual Evidence)
+### 8. Real Artifact Captures (Visual Evidence)
 
 Generate real screenshots and PDF outputs to physically inspect the final result:
 

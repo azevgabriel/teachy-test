@@ -25,6 +25,9 @@ export interface Specification {
 	fontSize?: string | null;
 	fontFamily?: string | null;
 	isRequired: boolean;
+	order?: number;
+	isVisible?: boolean;
+	showLabel?: boolean;
 	createdAt?: string;
 	updatedAt?: string;
 }

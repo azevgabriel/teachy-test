@@ -17,7 +17,11 @@ import { Skeleton } from "#/components/ui/skeleton";
 import { cn } from "#/lib/utils";
 import { PlanningHeader } from "./PlanningHeader";
 import { PlanningTableChunk, SectionDivider } from "./PlanningTable";
-import { type PageOrientation, paginatePlanning } from "./paginatePlanning";
+import {
+	type MeasuredHeights,
+	type PageOrientation,
+	paginatePlanning,
+} from "./paginatePlanning";
 import type { PlanningResponseDto } from "./types";
 
 interface PlanningViewerProps {
@@ -47,8 +51,18 @@ export function PlanningViewer({
 	const [zoomMode, setZoomMode] = React.useState<"fit" | "100">("fit");
 	const [manualZoom, setManualZoom] = React.useState<number | null>(null);
 
+	const [measuredHeights, setMeasuredHeights] =
+		React.useState<MeasuredHeights | null>(null);
+	const measureHeaderRef = React.useRef<HTMLDivElement>(null);
+	const measureRunningHeaderRef = React.useRef<HTMLDivElement>(null);
+	const measureSectionRef = React.useRef<HTMLDivElement>(null);
+	const measureTableRef = React.useRef<HTMLDivElement>(null);
+	const measureFooterRef = React.useRef<HTMLDivElement>(null);
+
 	const planning = data?.planning ?? null;
-	const specifications = data?.specifications || [];
+	const specifications = Array.isArray(data?.specifications)
+		? data.specifications
+		: [];
 	const hasBlocks = (planning?.blocks?.length ?? 0) > 0;
 
 	// Monitora ativamente o redimensionamento do painel e do navegador via ResizeObserver
@@ -73,6 +87,97 @@ export function PlanningViewer({
 		};
 	}, []);
 
+	// Medição dinâmica em DOM real para empacotamento exato por margens
+	React.useLayoutEffect(() => {
+		// Garante que reordenação ou visibilidade de especificações acione nova medição
+		void specifications;
+
+		if (!planning || !hasBlocks) {
+			setMeasuredHeights((prev) => (prev !== null ? null : prev));
+			return;
+		}
+
+		const headerEl = measureHeaderRef.current;
+		const runningHeaderEl = measureRunningHeaderRef.current;
+		const sectionEl = measureSectionRef.current;
+		const tableChunkEl = measureTableRef.current;
+		const footerEl = measureFooterRef.current;
+
+		const isLandscape = orientation === "landscape";
+		const sheetHeight = isLandscape ? 794 : 1123;
+		const paddingY = isLandscape ? 56 : 80;
+
+		const headerHeight = headerEl
+			? Math.ceil(headerEl.getBoundingClientRect().height)
+			: isLandscape
+				? 126
+				: 141;
+		const runningHeaderHeight = runningHeaderEl
+			? Math.ceil(runningHeaderEl.getBoundingClientRect().height)
+			: 38;
+		const sectionTitleHeight = sectionEl
+			? Math.ceil(sectionEl.getBoundingClientRect().height)
+			: 36;
+		const footerHeight = footerEl
+			? Math.ceil(footerEl.getBoundingClientRect().height)
+			: 46;
+
+		let tableHeaderHeight = 38;
+		let tableContainerMargin = 14;
+		const rowHeights: Record<string, number> = {};
+
+		if (tableChunkEl) {
+			const thead = tableChunkEl.querySelector("thead");
+			if (thead) {
+				tableHeaderHeight = Math.ceil(thead.getBoundingClientRect().height);
+			}
+			const tableWrapper = tableChunkEl.querySelector(".border.rounded-xs");
+			if (tableWrapper) {
+				const cs = window.getComputedStyle(tableWrapper);
+				const mb = Number.parseFloat(cs.marginBottom) || 12;
+				tableContainerMargin = Math.ceil(mb + 2);
+			}
+			const trList = tableChunkEl.querySelectorAll("tbody tr[data-block-id]");
+			for (let i = 0; i < trList.length; i += 1) {
+				const tr = trList[i];
+				const id = tr.getAttribute("data-block-id");
+				if (id) {
+					rowHeights[id] = Math.ceil(tr.getBoundingClientRect().height);
+				}
+			}
+		}
+
+		const nextHeights: MeasuredHeights = {
+			headerHeight,
+			runningHeaderHeight,
+			sectionTitleHeight,
+			tableHeaderHeight,
+			tableContainerMargin,
+			footerHeight,
+			paddingY,
+			sheetHeight,
+			rowHeights,
+		};
+
+		setMeasuredHeights((prev) => {
+			if (
+				prev &&
+				prev.sheetHeight === nextHeights.sheetHeight &&
+				prev.headerHeight === nextHeights.headerHeight &&
+				prev.tableHeaderHeight === nextHeights.tableHeaderHeight &&
+				prev.paddingY === nextHeights.paddingY &&
+				Object.keys(prev.rowHeights).length ===
+					Object.keys(rowHeights).length &&
+				Object.keys(rowHeights).every(
+					(k) => prev.rowHeights[k] === rowHeights[k],
+				)
+			) {
+				return prev;
+			}
+			return nextHeights;
+		});
+	}, [planning, specifications, orientation, hasBlocks]);
+
 	// Dimensões base físicas A4 em pixels (96 DPI)
 	const baseWidth = orientation === "landscape" ? 1123 : 794;
 	const baseHeight = orientation === "landscape" ? 794 : 1123;
@@ -92,10 +197,15 @@ export function PlanningViewer({
 		return Math.min(1.0, Math.max(0.3, availableWidth / baseWidth));
 	}, [manualZoom, zoomMode, containerWidth, baseWidth]);
 
-	// Diagrama o planejamento em folhas A4 discretas com base na orientação
+	// Diagrama o planejamento em folhas A4 discretas com base na orientação e medidas reais do DOM
 	const pages = React.useMemo(() => {
-		return paginatePlanning(planning, specifications, orientation);
-	}, [planning, specifications, orientation]);
+		return paginatePlanning(
+			planning,
+			specifications,
+			orientation,
+			measuredHeights,
+		);
+	}, [planning, specifications, orientation, measuredHeights]);
 
 	const handleExportPdf = async () => {
 		if (!sessionId) return;
@@ -139,7 +249,7 @@ export function PlanningViewer({
 					variant="ghost"
 					size="icon"
 					onClick={onToggle}
-					title="Expandir pré-visualização A4"
+					title="Expandir pré-visualização do planejamento"
 					className="h-9 w-9 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
 				>
 					<PanelLeftOpen className="h-4 w-4" />
@@ -153,7 +263,7 @@ export function PlanningViewer({
 					className="[writing-mode:vertical-rl] rotate-180 text-xs font-semibold tracking-wider uppercase text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-2 py-4 transition-colors cursor-pointer"
 				>
 					<FileSpreadsheet className="h-3.5 w-3.5 rotate-90" />
-					<span>Pré-visualização A4</span>
+					<span>Pré-visualização do Planejamento</span>
 					{hasBlocks && (
 						<span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
 					)}
@@ -184,7 +294,7 @@ export function PlanningViewer({
 				}
 			`}</style>
 
-			{/* Top Bar da Pré-visualização A4 */}
+			{/* Top Bar da Pré-visualização do Planejamento */}
 			<header className="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-xs gap-2 flex-wrap">
 				<div className="flex items-center gap-2">
 					<Button
@@ -203,7 +313,7 @@ export function PlanningViewer({
 						</div>
 						<div>
 							<h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
-								Pré-visualização A4
+								Planejamento
 							</h3>
 							<p className="text-[10px] text-slate-400 font-medium">
 								{isLoading
@@ -519,8 +629,10 @@ export function PlanningViewer({
 												<SectionDivider
 													key={item.id}
 													title={item.title || "Bloco"}
+													breadcrumbs={item.breadcrumbs}
 													dateRange={item.dateRange}
 													isContinuation={item.isContinuation}
+													parentBlock={item.parentBlock}
 												/>
 											);
 										}
@@ -552,6 +664,68 @@ export function PlanningViewer({
 					))
 				)}
 			</div>
+
+			{/* Container de medição oculto para cálculo exato de dimensões da folha A4 */}
+			{planning && hasBlocks && (
+				<div
+					aria-hidden="true"
+					className="pointer-events-none fixed -left-[99999px] top-0 invisible select-none opacity-0 z-[-9999]"
+					style={{ width: `${baseWidth}px` }}
+				>
+					<div
+						className={cn(
+							"bg-white text-slate-900 border border-slate-300 rounded-xs flex flex-col justify-between shrink-0",
+							orientation === "portrait"
+								? "w-[210mm] p-6 sm:p-10"
+								: "w-[297mm] p-5 sm:p-7",
+						)}
+						style={{ width: `${baseWidth}px` }}
+					>
+						<div ref={measureHeaderRef}>
+							<PlanningHeader
+								planning={planning}
+								specifications={specifications}
+							/>
+						</div>
+
+						<div
+							ref={measureRunningHeaderRef}
+							className="flex items-center justify-between pb-2 mb-4 border-b border-slate-200 text-xs text-slate-500 font-medium"
+						>
+							<span className="font-semibold text-slate-800">
+								Plano de Ensino &bull;{" "}
+								{planning.curricularComponents?.[0]?.name || "Pedagógico"}
+							</span>
+							<span className="font-mono text-[11px] text-slate-400">
+								Folha 2
+							</span>
+						</div>
+
+						<div ref={measureSectionRef}>
+							<SectionDivider
+								title="Medição da Seção"
+								breadcrumbs={["Nível 1", "Nível 2"]}
+							/>
+						</div>
+
+						<div ref={measureTableRef}>
+							<PlanningTableChunk
+								blocks={planning.blocks || []}
+								specifications={specifications}
+								allBlocks={planning.blocks || []}
+							/>
+						</div>
+
+						<div
+							ref={measureFooterRef}
+							className="a4-sheet-footer pt-3 mt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 font-medium"
+						>
+							<span>Plano Curricular Estruturado &bull; Teachy</span>
+							<span className="font-semibold text-slate-700">Folha 1 de 1</span>
+						</div>
+					</div>
+				</div>
+			)}
 		</aside>
 	);
 }
