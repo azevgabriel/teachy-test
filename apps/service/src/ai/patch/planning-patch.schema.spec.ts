@@ -55,7 +55,7 @@ describe('PlanningPatchSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('deve validar com sucesso ADD_SPECIFICATION', () => {
+  it('deve validar com sucesso ADD_SPECIFICATION com defaults de order, isVisible e showLabel', () => {
     const payload = {
       operation: 'ADD_SPECIFICATION',
       data: {
@@ -68,6 +68,34 @@ describe('PlanningPatchSchema', () => {
 
     const result = planningPatchPayloadSchema.safeParse(payload);
     expect(result.success).toBe(true);
+    if (result.success && 'operation' in result.data && result.data.operation === 'ADD_SPECIFICATION') {
+      expect(result.data.data.order).toBe(0);
+      expect(result.data.data.isVisible).toBe(true);
+      expect(result.data.data.showLabel).toBe(true);
+    }
+  });
+
+  it('deve validar com sucesso ADD_SPECIFICATION com order, isVisible e showLabel customizados', () => {
+    const payload = {
+      operation: 'ADD_SPECIFICATION',
+      data: {
+        colName: 'disciplina',
+        customLabel: 'Disciplina',
+        tableRef: 'PLANNING',
+        isRequired: false,
+        order: 2,
+        isVisible: false,
+        showLabel: false,
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (result.success && 'operation' in result.data && result.data.operation === 'ADD_SPECIFICATION') {
+      expect(result.data.data.order).toBe(2);
+      expect(result.data.data.isVisible).toBe(false);
+      expect(result.data.data.showLabel).toBe(false);
+    }
   });
 
   it('deve validar com sucesso FILL_METADATA', () => {

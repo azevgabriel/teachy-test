@@ -32,6 +32,9 @@ export class AddSpecificationWithSlotsUseCase {
           tableRef,
           description: data.description || existing.description,
           isRequired: data.isRequired ?? existing.isRequired,
+          order: data.order !== undefined ? data.order : existing.order,
+          isVisible: data.isVisible !== undefined ? data.isVisible : existing.isVisible,
+          showLabel: data.showLabel !== undefined ? data.showLabel : existing.showLabel,
         },
       });
     } else {
@@ -43,6 +46,9 @@ export class AddSpecificationWithSlotsUseCase {
           tableRef,
           description: data.description || null,
           isRequired: data.isRequired ?? false,
+          order: data.order ?? 0,
+          isVisible: data.isVisible ?? true,
+          showLabel: data.showLabel ?? true,
         },
       });
     }

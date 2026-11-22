@@ -22,15 +22,18 @@ flowchart TD
     Classifier -->|5. Analytical Query| I5["READ_ONLY\nComputes response without database mutations"]
     Classifier -->|6. Block Deletion| I6["DELETE_BLOCK_WITH_GAP\nDeletes block and guides remediation of time gap"]
     Classifier -->|7. Full Reset| I7["RESET_PLANNING\nCascading reset to restart planning workflow"]
+    Classifier -->|8. Native Override & Reordering| I8["ADD_SPECIFICATION / UPSERT_PLANNING\nOverrides native labels, toggles visibility, sets order"]
+    Classifier -->|9. Macro BNCC Purge| I9["UPSERT_PLANNING (bnccCodes: [])\nClears macro header skills while preserving daily block skills"]
 ```
 
 ---
 
 ## 0. Initial Setup & Definitive Parameters (`UPSERT_PLANNING`)
-* **Teacher Command:** *"I want to create a monthly math plan for the 3rd grade covering BNCC skills EF03MA01 and EF03MA02"*.
+* **Teacher Command:** *"I want to create a monthly math plan for the 3rd grade covering BNCC skills EF03MA01 and EF03MA02"* or *"Let's switch to High School 3rd year in Portuguese"*.
 * **AI Behavior:**
   - Detects consolidated planning parameters (subject, grade level, cycle granularity, dates, and BNCC objectives).
-  - Emits the `UPSERT_PLANNING` payload containing header fields, connected curricular components, macro `learningObjectives`, and initial skeleton `planning_blocks`.
+  - Emits the `UPSERT_PLANNING` payload utilizing **rigorously the official string catalog** for `applicationYearName` (e.g. `"3º ano do Ensino Médio"`) and `curricularComponentNames` (e.g. `["Língua Portuguesa"]`).
+  - **Dynamic Pivot Support:** When the teacher redirects the plan to another grade or subject mid-conversation, emits `UPSERT_PLANNING` with the new target parameters, atomically purging obsolete macro `learningObjectives` from the previous stage.
 * **Prisma Operation:**
   ```typescript
   await prisma.planning.upsert({
@@ -161,11 +164,72 @@ flowchart TD
 ---
 
 ## 7. Full Planning Reset (`RESET_PLANNING`)
-* **Teacher Command:** *"I don't like how this turned out; let's start over from scratch"*.
+* **Teacher Command:** *"I don't like how this turned out; let's start over from scratch"* or *"Quero recomeçar do zero"*.
 * **AI Behavior:**
+  - Emits the `RESET_PLANNING` payload (`{ "operation": "RESET_PLANNING", "data": {} }`).
   - Executes cascading deletion of the session's planning and specifications:
     ```typescript
     await prisma.planning.deleteMany({ where: { sessionId } });
     await prisma.specification.deleteMany({ where: { sessionId } });
     ```
-  - Resets the dialogue state to the initial discovery phase.
+  - **Watermark Pruning:** Triggers historical context demarcation in `ChatService`, purging conversations prior to the reset point and starting the discovery phase 100% clean without residual terms from the discarded plan.
+
+---
+
+## 8. Native Field Override, Reordering & Label Omission (`ADD_SPECIFICATION` / `UPSERT_PLANNING`)
+* **Teacher Command:** *"Rename Component to Subject and change it to English"*, *"Don't show the label for the bimester, just display '2º Bimestre'"*, or *"Move evaluations to the first position in the header"*.
+* **AI Behavior:**
+  - **Native Field Override (Anti-Duplication):** Detects when the teacher references an existing native field (`curricularComponents`, `metodologia`, `evaluations`). Instead of creating a redundant EAV specification, overrides the presentation mold (`colName: "curricularComponents"`, `customLabel: "Subject"`) and updates the physical relation directly (`curricularComponentNames: ["Língua Inglesa"]`).
+  - **Label Omission (`showLabel: false`):** Enables direct value rendering on cards or columns when the teacher prefers displaying only the content without an overarching category title.
+  - **Universal Reordering (`order: Int`):** Assigns deterministic integer sequence values (`order = 1, 2, 3...`) to control header cards and table columns.
+* **Prisma Operation:**
+  ```typescript
+  // Overrides native column presentation without creating PlanningMetadataValue rows:
+  await prisma.specification.upsert({
+    where: { id: existingSpecId },
+    update: {
+      customLabel: 'Subject',
+      order: 1,
+      showLabel: false,
+    },
+    create: {
+      sessionId,
+      colName: 'curricularComponents',
+      customLabel: 'Subject',
+      tableRef: 'PLANNING',
+      order: 1,
+      showLabel: false,
+    },
+  });
+  ```
+
+---
+
+## 9. Macro BNCC Skill Purge (`UPSERT_PLANNING` with `bnccCodes: []`)
+* **Teacher Command:** *"The daily lessons already have their BNCC codes; remove the skills from the header at the top"* or *"Don't display skills in the macro header"*.
+* **AI Behavior:**
+  - Understands that aggregating BNCC skills at the macro level creates visual clutter in daily-granularity plans.
+  - Emits `UPSERT_PLANNING` with `bnccCodes: []`.
+  - Atomically purges all `learning_objectives` linked to `planning_id` while preserving 100% of skills linked to `planning_block_id`.
+* **Prisma Operation:**
+  ```typescript
+  // Explicitly deletes only macro header skills:
+  await prisma.learningObjective.deleteMany({
+    where: { planningId: planning.id },
+  });
+  ```
+
+---
+
+## 10. Natural Language $\leftrightarrow$ Schema Mapping Dictionary
+
+| Teacher Conversational Expression | Schema Target | Scope / Table | Primary Operation | Anti-Duplication Rule |
+| :--- | :--- | :--- | :--- | :--- |
+| *"No cabeçalho"*, *"No topo"*, *"No ciclo"* | `Planning` | Macro Header (`PLANNING`) | `UPSERT_PLANNING` / `ADD_SPECIFICATION` | Direct macro properties; never attach to blocks. |
+| *"Disciplina"*, *"Matéria"*, *"Componente"* | `Planning.curricularComponents` | Macro Header (`PLANNING`) | `UPSERT_PLANNING.curricularComponentNames` | Override `colName: "curricularComponents"`; **never** create `colName: "disciplina"` in EAV. |
+| *"Avaliação no cabeçalho"* | `Planning.evaluations` | Macro Header (`PLANNING`) | `UPSERT_PLANNING.evaluations` | XOR constraint: `planning_id IS NOT NULL`. |
+| *"Sequência didática"*, *"Metodologia"* | `PlanningBlock.metodologia` | Blocks (`PLANNING_BLOCK`) | `UPDATE_BLOCK_BY_DATE` / `BATCH_UPDATE_COLUMN` | Override `colName: "metodologia"`; persist text in physical column. |
+| *"Remover habilidades do cabeçalho"* | `Planning.learningObjectives` | Macro Header (`PLANNING`) | `UPSERT_PLANNING` with `bnccCodes: []` | Deletes only `where: { planningId: id }`; preserves daily block skills. |
+| *"Exibir só o valor, sem rótulo"* | `Specification.showLabel` | Either | `ADD_SPECIFICATION` (`showLabel: false`) | Renders raw value without card title. |
+| *"Ocultar coluna/seção"* | `Specification.isVisible` | Either | `ADD_SPECIFICATION` (`isVisible: false`) | Suppresses rendering without deleting persisted data. |
+| *"Mudar ordem das colunas/cards"* | `Specification.order` | Either | `ADD_SPECIFICATION` (`order: Int`) | Sequenced via `orderBy: [{ order: 'asc' }, { createdAt: 'asc' }]`. |

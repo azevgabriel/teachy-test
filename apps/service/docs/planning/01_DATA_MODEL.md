@@ -94,6 +94,9 @@ classDiagram
         +String customLabel
         +String description
         +Boolean isRequired
+        +Int order
+        +Boolean isVisible
+        +Boolean showLabel
     }
     class PlanningMetadataValue {
         +UUID id
@@ -112,8 +115,12 @@ Defines the contract and definition mold for a field within the active session:
   - `PLANNING`: Macro header metadata.
   - `PLANNING_BLOCK`: Lesson / block metadata.
 - **`isRequired` (`Boolean @default(false)`):** Marks whether this field is mandatory for the school/session. When `true`, triggers mandatory AI slot-filling.
+- **`order` (`Int @default(0)`):** Universal numeric ordering sequence for header elements and table columns.
+- **`isVisible` (`Boolean @default(true)`):** Controls visibility and omission of sections or columns without deleting underlying data.
+- **`showLabel` (`Boolean @default(true)`):** Controls whether the top field label is rendered or omitted (rendering direct value only).
 - **Dual Semantics of `colName`:**
-  1. *Native Column Override:* When `colName` matches a fixed native column (e.g. `metodologia`), the specification only changes the display label (`customLabel = "Sequência Didática"`). **Generates 0 rows in `PlanningMetadataValue`**, persisting data directly into the physical column.
+  1. *Native Column Override (Anti-Duplication Invariant):* When `colName` matches a fixed native column or relation (e.g. `metodologia`, `curricularComponents`, `evaluations`, `learningObjectives`), the specification acts strictly as a presentation mold (`customLabel`, `order`, `isVisible`, `showLabel`). **Generates 0 rows in `PlanningMetadataValue`**, persisting data directly into the physical column or relation.
+     - *Anti-Duplication Rule:* If the teacher asks to rename "Componente" to "Disciplina" and change the subject to "Português", the system updates `Planning.curricularComponents` directly (via `curricularComponentNames: ["Língua Portuguesa"]`) and updates the specification with `colName: "curricularComponents"`, `customLabel: "Disciplina"`. It **never creates an ad-hoc EAV specification `colName: "disciplina"` with separate `PlanningMetadataValue` rows**, which would create duplicate cards on the UI.
   2. *Custom Dynamic Field:* When `colName` does not exist on the fixed table (e.g. `recursos_didaticos`, `aplicacao_crista`), the specification generates **1 or more rows in `PlanningMetadataValue`**.
 - **`description`:** Pedagogical instructions on how the field should be authored (fed directly into AI system prompts).
 
@@ -157,6 +164,18 @@ CHECK (
 
 Persistence use cases and AI patch handlers must always populate exactly one of the foreign keys (`planning_id` or `planning_block_id`), never both and never neither.
 
+### Macro BNCC Isolation via XOR (`bnccCodes: []`)
+Because `learning_objectives` enforces the XOR constraint between `planning_id` and `planning_block_id`, macro cycle objectives and micro lesson objectives are strictly partitioned at the database level:
+- When a plan reaches daily granularity, duplicating all aggregated BNCC skills in the macro header causes visual clutter.
+- Explicitly passing `bnccCodes: []` in `UPSERT_PLANNING` triggers an atomic deletion scoped strictly to the macro header:
+  ```typescript
+  await prisma.learningObjective.deleteMany({
+    where: { planningId: planning.id },
+  });
+  ```
+- Daily lesson skills (`planning_block_id IS NOT NULL`) remain 100% untouched.
+- Alternatively, visual omission without deleting database records can be achieved by updating the specification with `isVisible: false`.
+
 ---
 
 ## 5. Audit Trail & Chat History Hygiene (`Conversation.commands`)
@@ -181,3 +200,23 @@ model Conversation {
 ### Architectural Rationale:
 1. **Context Window Hygiene:** `Conversation.text` stores strictly sanitized, human-readable Markdown. When previous messages are compiled for subsequent LLM turns, historical JSON blocks are completely excluded, preserving context window budget and respecting the Database Snapshot as the single source of truth.
 2. **Auditability & Traceability:** `Conversation.commands` records the parsed and validated patch payload executed by the AI, enabling retroactive inspection, debugging, and telemetry on planning mutations.
+
+---
+
+## 6. Resolução Determinística de Catálogo Relacional & Sincronização Atômica de Pivot
+
+### A. Anti-Pattern de "Fuzzy Matching Frouxo" em Entidades Catalogadas
+Tentativas de resolver chaves estrangeiras relacionais (`ApplicationYear` e `CurricularComponent`) utilizando `String.includes()` ou buscas heurísticas frouxas provocam colisões silenciosas graves:
+- **Colisão de Segmentos por Numerais Ordinais:** "3º Ano do EM" era capturado pelo primeiro registro contendo "3º" (`3º ano do Ensino Fundamental I`), ignorando o Ensino Médio.
+- **Colisão de Domínio entre Componentes:** "Língua Portuguesa" caía em "Escuta, fala, pensamento e imaginação" por agrupamentos frouxos (`|| lowerC.includes('escuta')`).
+- **Falsos Positivos de Meses Infantis:** Expressões da Educação Infantil como "1 ano e 7 meses" colidiam com "7º ano".
+
+### B. Hierarquia de Resolução Determinística (`academic-catalog-matcher.ts`)
+1. **Match Exato Normalizado Prioritário:** Comparação canônica sem acentos e em minúsculas contra o catálogo oficial.
+2. **Desambiguação Categórica por Etapa (`EducationStage`):** Marcadores como `"EM"`, `"Médio"` restringem a busca exclusivamente à etapa `MEDIO`; marcadores de `"Fundamental I"` ou `"Fundamental II"` separam o 1º-5º ano do 6º-9º ano; marcadores infantis (`"bebês"`, `"crianças bem pequenas"`, `"meses"`, `"creche"`) são resolvidos na etapa `INFANTIL` antes de qualquer avaliação de numerais ordinais.
+3. **Isolamento Estrito de Domínio Curricular:** Componentes curriculares da Educação Básica e Campos de Experiência da Educação Infantil são domínios disjuntos e nunca compartilham rotas de fallback.
+
+### C. Sincronização Atômica de Transições de Cabeçalho (Pivot)
+Ao alterar a etapa (`yearChanged`) ou componentes de um planejamento existente:
+- As habilidades BNCC macro (`LearningObjective`) atreladas à etapa anterior que não pertençam aos novos `bnccCodes` são automaticamente purgadas.
+- Os componentes curriculares são sincronizados via `set: componentIds`, prevenindo que disciplinas ou habilidades incompatíveis de um segmento anterior sobrevivam na base após um redirecionamento pedagógico.

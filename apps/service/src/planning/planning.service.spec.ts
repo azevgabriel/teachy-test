@@ -196,6 +196,10 @@ describe('PlanningService', () => {
       prismaMock.specification.findMany.mockResolvedValue(mockSpecs);
 
       const result = await planningService.getPlanningBySessionId('s1');
+      expect(prismaMock.specification.findMany).toHaveBeenCalledWith({
+        where: { sessionId: 's1' },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      });
       expect(result.planning).toEqual(mockPlanning);
       expect(result.specifications).toEqual(mockSpecs);
     });
