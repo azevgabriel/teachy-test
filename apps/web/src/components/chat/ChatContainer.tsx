@@ -1,7 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
 import { PanelRight, Sparkles } from "lucide-react";
 import * as React from "react";
+import { PlanningViewer } from "#/components/planning/PlanningViewer";
+import { usePlanningSync } from "#/components/planning/usePlanningSync";
 import { Button } from "#/components/ui/button";
+import { cn } from "#/lib/utils";
 import { ChatInput } from "./ChatInput";
 import { ChatTimeline } from "./ChatTimeline";
 import { Sidebar } from "./Sidebar";
@@ -28,7 +31,8 @@ export function ChatContainer({
 	const [activeSessionTitle, setActiveSessionTitle] = React.useState<
 		string | undefined
 	>(propSessionTitle);
-	const [sidebarOpen, setSidebarOpen] = React.useState(true);
+	const [sidebarOpen, setSidebarOpen] = React.useState(false); // Histórico fechado por padrão para dar espaço ao split-view
+	const [planningOpen, setPlanningOpen] = React.useState(true); // Pré-visualização A4 sempre visível à esquerda por padrão
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [inputValue, setInputValue] = React.useState("");
 	const firstMessageSentRef = React.useRef<string | null>(null);
@@ -39,7 +43,15 @@ export function ChatContainer({
 		setActiveSessionTitle(propSessionTitle);
 	}, [propSessionId, propSessionTitle]);
 
-	// Busca a lista de sessões para a barra lateral direita
+	// Hook de sincronização em tempo real do planejamento via REST
+	const {
+		data: planningData,
+		isLoading: isPlanningLoading,
+		error: planningError,
+		refetch: refetchPlanning,
+	} = usePlanningSync({ sessionId: activeSessionId });
+
+	// Busca a lista de sessões para a barra lateral de histórico
 	const fetchSessions = React.useCallback(async () => {
 		try {
 			const res = await fetch("/api/sessions");
@@ -60,13 +72,17 @@ export function ChatContainer({
 		(newSessionId: string) => {
 			setActiveSessionId(newSessionId);
 			fetchSessions();
+			refetchPlanning(newSessionId);
 		},
-		[fetchSessions],
+		[fetchSessions, refetchPlanning],
 	);
 
 	const handleMessageSaved = React.useCallback(() => {
 		fetchSessions();
-	}, [fetchSessions]);
+		if (activeSessionId) {
+			refetchPlanning(activeSessionId);
+		}
+	}, [fetchSessions, activeSessionId, refetchPlanning]);
 
 	const { messages, partialText, isStreaming, error, sendMessage, stopStream } =
 		useChatStream({
@@ -181,12 +197,30 @@ export function ChatContainer({
 
 	return (
 		<div className="flex h-screen w-full overflow-hidden bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-			{/* Área Central / Esquerda: Chat */}
-			<main className="flex flex-col flex-1 h-full min-w-0">
+			{/* Área Esquerda: Pré-visualização do Planejamento no Formato A4 */}
+			<PlanningViewer
+				sessionId={activeSessionId}
+				data={planningData}
+				isLoading={isPlanningLoading}
+				error={planningError}
+				isOpen={planningOpen}
+				onToggle={() => setPlanningOpen((prev) => !prev)}
+				onRefresh={() => refetchPlanning()}
+			/>
+
+			{/* Área Central / Direita: Chat com Assistente */}
+			<main
+				className={cn(
+					"flex flex-col h-full min-w-0 transition-all duration-300",
+					planningOpen
+						? "w-full md:w-1/2 lg:w-[48%] xl:w-[44%] shrink-0"
+						: "w-full flex-1",
+				)}
+			>
 				{/* Top Bar do Chat */}
 				<header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xs shrink-0">
 					<div className="flex items-center gap-2 truncate">
-						<div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+						<div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
 							T
 						</div>
 						<div className="truncate">
@@ -201,13 +235,13 @@ export function ChatContainer({
 						</div>
 					</div>
 
-					<div className="flex items-center gap-2">
+					<div className="flex items-center gap-1.5">
 						{!sidebarOpen && (
 							<Button
 								variant="outline"
 								size="sm"
 								onClick={() => setSidebarOpen(true)}
-								className="gap-1.5 text-xs h-8"
+								className="gap-1.5 text-xs h-8 text-slate-600 dark:text-slate-300"
 							>
 								<PanelRight className="h-4 w-4" />
 								<span>Histórico</span>
@@ -275,7 +309,7 @@ export function ChatContainer({
 				/>
 			</main>
 
-			{/* Barra Lateral Direita Retrátil (Abre-e-Fecha) */}
+			{/* Barra Lateral de Histórico de Conversas Retrátil */}
 			<Sidebar
 				isOpen={sidebarOpen}
 				onToggle={() => setSidebarOpen((prev) => !prev)}
