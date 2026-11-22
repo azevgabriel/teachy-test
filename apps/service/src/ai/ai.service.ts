@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenAI } from '@google/genai';
+import {
+  SystemInstructionBuilder,
+  type SystemInstructionContext,
+} from './prompts/system/index.js';
 
 export interface ChatHistoryMessage {
   role: 'user' | 'model';
@@ -11,6 +15,8 @@ export interface StreamChatOptions {
   userMessage: string;
   signal?: AbortSignal;
   onChunk: (chunkText: string) => void;
+  systemInstruction?: string;
+  systemInstructionContext?: SystemInstructionContext;
 }
 
 @Injectable()
@@ -65,9 +71,8 @@ export class AiService {
     }
 
     const systemInstruction =
-      'Você é o assistente pedagógico inteligente da plataforma Teachy, especialista em auxiliar professores da educação básica.\n\n' +
-      'Diretrizes fundamentais:\n' +
-      '1. Responda em português brasileiro com formatação Markdown clara, didática e tom profissional.';
+      options.systemInstruction ||
+      SystemInstructionBuilder.build(options.systemInstructionContext);
 
     const candidateModels = [
       process.env.GEMINI_MODEL,
