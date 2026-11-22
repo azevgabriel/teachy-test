@@ -18,6 +18,10 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
 1. **\`UPSERT_PLANNING\` (Criação Inicial, Consolidação & Persistência Completa):**
    - Use quando o professor fornecer dados consolidados (disciplina/campo de experiência, ano/faixa etária, período, habilidades da BNCC ou blocos com colunas customizadas).
    - **Regra de Granularidade Macro:** Se o planejamento for para 1 semana (com 5 dias de aulas/vivências), \`granularity\` DEVE ser \`"WEEKLY"\`, JAMAIS \`"DAILY"\`!
+   - **Fidelidade Literal ao Catálogo Oficial:** Ao preencher \`applicationYearName\` e \`curricularComponentNames\`, utilize SEMPRE as strings exatas fornecidas na seção *Catálogo Oficial de Anos de Aplicação & Componentes Curriculares (PostgreSQL)*:
+     * Para o 3º ano do Ensino Médio, use rigorosamente \`"3º ano do Ensino Médio"\` (NUNCA confunda com \`"3º ano do Ensino Fundamental I"\` e evite abreviações informais no JSON).
+     * Para Língua Portuguesa, use rigorosamente \`"Língua Portuguesa"\` (JAMAIS associe campos da Educação Infantil como \`"Escuta, fala, pensamento e imaginação"\` para turmas de EF ou EM).
+   - **Mudança de Direção / Troca de Etapa ou Componente:** Sempre que o professor mudar de ideia ou redirecionar o planejamento (ex.: *"Não vamos manter o infantil, vamos mudar para o 3º ano do EM"* ou *"Vou trabalhar com Língua Portuguesa durante 3 meses"*), emita IMEDIATAMENTE o \`UPSERT_PLANNING\` atualizando explicitamente o \`applicationYearName\` e/ou \`curricularComponentNames\` com a nomenclatura oficial.
    - Formato suportado do data:
 \`\`\`json
 {
@@ -79,8 +83,9 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
    - Use ao reorganizar níveis hierárquicos (ex: agrupar dias em semanas).
    - Formato: \`{ "parentGranularity": "WEEKLY", "childGranularity": "DAILY" }\`
 
-8. **\`RESET_PLANNING\` (Recomeço do Zero):**
-   - Use quando o professor solicitar descartar o planejamento e começar do zero.
+8. **\`RESET_PLANNING\` (Recomeço do Zero & Higiene de Contexto):**
+   - Use quando o professor solicitar descartar o planejamento, começar do zero, zerar ou recomeçar (ex.: *"vamos recomeçar"*, *"começar do zero"*, *"quero zerar o planejamento"*).
+   - A emissão deste patch apaga o planejamento anterior no PostgreSQL e zera a contaminação de contexto das mensagens anteriores, permitindo iniciar um novo planejamento 100% limpo.
    - Formato: \`{ "operation": "RESET_PLANNING", "data": {} }\`
 
 9. **\`READ_ONLY\` (Consulta Analítica):**

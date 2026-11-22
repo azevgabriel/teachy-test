@@ -181,3 +181,23 @@ model Conversation {
 ### Architectural Rationale:
 1. **Context Window Hygiene:** `Conversation.text` stores strictly sanitized, human-readable Markdown. When previous messages are compiled for subsequent LLM turns, historical JSON blocks are completely excluded, preserving context window budget and respecting the Database Snapshot as the single source of truth.
 2. **Auditability & Traceability:** `Conversation.commands` records the parsed and validated patch payload executed by the AI, enabling retroactive inspection, debugging, and telemetry on planning mutations.
+
+---
+
+## 6. Resolução Determinística de Catálogo Relacional & Sincronização Atômica de Pivot
+
+### A. Anti-Pattern de "Fuzzy Matching Frouxo" em Entidades Catalogadas
+Tentativas de resolver chaves estrangeiras relacionais (`ApplicationYear` e `CurricularComponent`) utilizando `String.includes()` ou buscas heurísticas frouxas provocam colisões silenciosas graves:
+- **Colisão de Segmentos por Numerais Ordinais:** "3º Ano do EM" era capturado pelo primeiro registro contendo "3º" (`3º ano do Ensino Fundamental I`), ignorando o Ensino Médio.
+- **Colisão de Domínio entre Componentes:** "Língua Portuguesa" caía em "Escuta, fala, pensamento e imaginação" por agrupamentos frouxos (`|| lowerC.includes('escuta')`).
+- **Falsos Positivos de Meses Infantis:** Expressões da Educação Infantil como "1 ano e 7 meses" colidiam com "7º ano".
+
+### B. Hierarquia de Resolução Determinística (`academic-catalog-matcher.ts`)
+1. **Match Exato Normalizado Prioritário:** Comparação canônica sem acentos e em minúsculas contra o catálogo oficial.
+2. **Desambiguação Categórica por Etapa (`EducationStage`):** Marcadores como `"EM"`, `"Médio"` restringem a busca exclusivamente à etapa `MEDIO`; marcadores de `"Fundamental I"` ou `"Fundamental II"` separam o 1º-5º ano do 6º-9º ano; marcadores infantis (`"bebês"`, `"crianças bem pequenas"`, `"meses"`, `"creche"`) são resolvidos na etapa `INFANTIL` antes de qualquer avaliação de numerais ordinais.
+3. **Isolamento Estrito de Domínio Curricular:** Componentes curriculares da Educação Básica e Campos de Experiência da Educação Infantil são domínios disjuntos e nunca compartilham rotas de fallback.
+
+### C. Sincronização Atômica de Transições de Cabeçalho (Pivot)
+Ao alterar a etapa (`yearChanged`) ou componentes de um planejamento existente:
+- As habilidades BNCC macro (`LearningObjective`) atreladas à etapa anterior que não pertençam aos novos `bnccCodes` são automaticamente purgadas.
+- Os componentes curriculares são sincronizados via `set: componentIds`, prevenindo que disciplinas ou habilidades incompatíveis de um segmento anterior sobrevivam na base após um redirecionamento pedagógico.
