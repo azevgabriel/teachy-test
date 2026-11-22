@@ -102,6 +102,10 @@ The AI translates natural conversational expressions into normalized ISO `DateTi
 - The chat timeline is strictly reserved for high-bandwidth conversational decision-making, pedagogical reasoning, and co-creative dialogue.
 - The comprehensive visual representation of the table belongs exclusively to the **Living Draft** rendered in the interactive side-panel, which updates silently in real time.
 
+### C. Trailing Structured Envelope Rule
+- Any structured planning mutation payload (`<!--PLANNING_PATCH: ... -->`) must reside **strictly at the very end** of the model's message.
+- Emitting the conversational explanation first guarantees zero perception delay for the teacher during visual streaming.
+
 ---
 
 ## 7. Database Snapshot as Single Source of Truth
@@ -121,3 +125,14 @@ Prior to formulating each response, the AI evaluates the current Snapshot agains
    - Are there daily blocks without methodology or assigned BNCC skills?
    - Do registered evaluations include clear assessment criteria?
 2. **Surgical Guidance:** The AI leverages this diagnostic to steer the next turn naturally, keeping the co-planning workflow focused on completing the lesson plan with maximum pedagogical rigor.
+
+---
+
+## 8. Atomic Stream Commit & Mid-Flight Cancellation Resilience
+
+Planning modifications are strictly decoupled from mid-flight streaming:
+1. **Transactional Gating:** Mutating use cases in `PlanningModule` are executed **exclusively upon successful completion of the stream**.
+2. **Cancellation Invariant:** If the teacher clicks the stop generation button (`signal.aborted`) or the connection disconnects:
+   - The message is flagged as `interrupted: true`.
+   - **Zero planning mutations are committed to PostgreSQL**.
+   - The previously established lesson plan draft remains fully preserved and uncorrupted.

@@ -11,7 +11,7 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     const instruction = SystemInstructionBuilder.build();
 
     // 1. Persona Base & Antidump Guardrail
-    expect(instruction).toContain('Assistente Pedagógico Teachy — Persona & Co-criação');
+    expect(instruction).toContain('Assistente Pedagógico Teachy — Co-piloto de Planejamento Escolar');
     expect(instruction).toContain('Regra Antidump de Tabelas');
     expect(instruction).toContain('Living Draft');
 
@@ -36,10 +36,15 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     expect(instruction).toContain('DELETE_BLOCK_WITH_GAP');
     expect(instruction).toContain('RESET_PLANNING');
 
-    // 5. Orientações de Fase Padrão (Discovery quando sem snapshot)
+    // 5. Protocolo de Saída Dupla & Envelope de Persistência
+    expect(instruction).toContain('Protocolo de Saída Dupla & Envelope Estruturado de Persistência');
+    expect(instruction).toContain('PLANNING_PATCH');
+    expect(instruction).toContain('UPSERT_PLANNING');
+
+    // 6. Orientações de Fase Padrão (Discovery quando sem snapshot)
     expect(instruction).toContain('Fase Atual: Descoberta');
 
-    // 6. Snapshot Consolidado como Fonte Única da Verdade
+    // 7. Snapshot Consolidado como Fonte Única da Verdade
     expect(instruction).toContain('Snapshot Consolidado do Banco de Dados (Fonte Única da Verdade)');
   });
 
@@ -184,7 +189,7 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     });
   });
 
-  describe('custom teacher context', () => {
+  describe('custom teacher context and database catalog', () => {
     it('appends teacher profile and custom instructions when provided', () => {
       const instruction = SystemInstructionBuilder.build({
         teacherName: 'Profa. Mariana',
@@ -193,6 +198,25 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
 
       expect(instruction).toContain('Professor atendido: Profa. Mariana');
       expect(instruction).toContain('Focar em metodologias ativas para turma inclusiva.');
+    });
+
+    it('injects official application years and curricular components catalog', () => {
+      const instruction = SystemInstructionBuilder.build({
+        availableYears: [
+          { id: 'y1', name: 'Ensino Infantil (zero a 1 ano e 6 meses)' },
+          { id: 'y2', name: '3º ano do Ensino Fundamental I' },
+        ],
+        availableCurricularComponents: [
+          { id: 'c1', name: 'Corpo, gestos e movimentos' },
+          { id: 'c2', name: 'Matemática' },
+        ],
+      });
+
+      expect(instruction).toContain('Catálogo Oficial de Anos de Aplicação & Componentes Curriculares (PostgreSQL)');
+      expect(instruction).toContain('"Ensino Infantil (zero a 1 ano e 6 meses)"');
+      expect(instruction).toContain('"3º ano do Ensino Fundamental I"');
+      expect(instruction).toContain('"Corpo, gestos e movimentos"');
+      expect(instruction).toContain('"Matemática"');
     });
   });
 });

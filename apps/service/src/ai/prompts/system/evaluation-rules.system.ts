@@ -25,7 +25,12 @@ export const EVALUATION_RULES_SYSTEM_PROMPT = `
 - **Qualitativa / Sem Nota (\`grade: null\`):** Fundamental para Educação Infantil e relatórios de desenvolvimento contínuo socioemocional.
 - **Bônus / Ponto Extra:** Tarefas de desafio somando pontuação adicional.
 
-## 4. Escopo & Hierarquia
-- **Avaliações no Planejamento Macro (\`planningId\`):** Avaliações somativas de encerramento de ciclo, relatórios globais de Educação Infantil ou notas processuais de trimestre.
-- **Avaliações no Bloco (\`planningBlockId\`):** Provas mensais, trabalhos semanais ou verificações pontuais de uma aula.
+## 4. Escopo & Hierarquia: Avaliação Geral vs Avaliação Diária
+- **Avaliação Geral / do Ciclo (Cabeçalho \`Planning\`):**
+  - Quando o professor indicar que a avaliação é feita de maneira **geral, formativa ou contínua ao longo da semana/ciclo** (ex.: *"como avaliar a aprendizagem no contexto geral da semana"*, *"avaliação é feita de maneira geral, não diária"*):
+    * A avaliação DEVE ser registrada **exclusivamente no cabeçalho macro \`Planning\`** (\`UPSERT_PLANNING.data.evaluations\`).
+    * **É RIGOROSAMENTE PROIBIDO duplicar ou gerar uma avaliação para cada dia/bloco!**
+    * Mantenha a avaliação no cabeçalho macro e deixe a lista de avaliações dos blocos diários vazia.
+- **Avaliações no Bloco (\`PlanningBlock\`):**
+  - Somente adicione avaliações em \`blocks[i].evaluations\` se o professor solicitar explicitamente um instrumento pontual para aquele dia específico (ex: *"na sexta-feira haverá prova escrita"*, *"na terça terá seminário"*).
 `.trim();

@@ -24,15 +24,30 @@ describe('ChatService', () => {
         update: vi.fn(),
         delete: vi.fn(),
       },
+      applicationYear: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      curricularComponent: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      bnccSkill: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     };
 
     aiServiceMock = {
       streamChat: vi.fn(),
     };
 
+    const planningServiceMock = {
+      applyPatch: vi.fn().mockResolvedValue(undefined),
+      getPlanningBySessionId: vi.fn(),
+    };
+
     chatService = new ChatService(
       prismaMock as unknown as PrismaService,
       aiServiceMock as unknown as AiService,
+      planningServiceMock as any,
     );
   });
 
@@ -205,6 +220,7 @@ describe('ChatService', () => {
         where: { id: 'msg-id' },
         data: {
           text: 'Olá mundo!',
+          commands: null,
           interrupted: false,
         },
       });
@@ -273,6 +289,7 @@ describe('ChatService', () => {
         where: { id: 'msg-id' },
         data: {
           text: 'Parte 1',
+          commands: null,
           interrupted: true,
         },
       });
@@ -380,8 +397,121 @@ describe('ChatService', () => {
 
       // Deve passar a instrução de sistema construída dinamicamente
       expect(callArgs.systemInstruction).toBeDefined();
-      expect(callArgs.systemInstruction).toContain('Assistente Pedagógico Teachy — Persona & Co-criação');
+      expect(callArgs.systemInstruction).toContain('Assistente Pedagógico Teachy — Co-piloto de Planejamento Escolar');
       expect(callArgs.systemInstruction).toContain('Regra Antidump de Tabelas');
+    });
+
+    it('suppresses structured patch delimiters and JSON from onChunk and saves patch into Conversation.commands', async () => {
+      prismaMock.session.findUnique.mockResolvedValue({
+        id: 's1',
+        name: 'Sessão com patch',
+        conversations: [],
+      });
+
+      prismaMock.conversation.create
+        .mockResolvedValueOnce({ id: 'u-1', text: 'Quero resetar o plano', type: 'USER', interrupted: false })
+        .mockResolvedValueOnce({ id: 'ia-1', text: '', type: 'IA', interrupted: false });
+
+      prismaMock.conversation.update.mockResolvedValue({
+        id: 'ia-1',
+        text: 'Sem problemas, vamos recomeçar do zero.',
+        commands: { operation: 'RESET_PLANNING', data: {} },
+        interrupted: false,
+      });
+
+      prismaMock.session.update.mockResolvedValue({});
+
+      // Simula streaming emitindo chunks onde os últimos contêm o envelope estruturado
+      aiServiceMock.streamChat.mockImplementation(async (options: any) => {
+        options.onChunk('Sem problemas, ');
+        options.onChunk('vamos recomeçar do zero.\n\n');
+        options.onChunk('<!--PLANNING_PATCH:\n');
+        options.onChunk('{"operation": "RESET_PLANNING", "data": {}}\n');
+        options.onChunk('-->');
+        return 'Sem problemas, vamos recomeçar do zero.\n\n<!--PLANNING_PATCH:\n{"operation": "RESET_PLANNING", "data": {}}\n-->';
+      });
+
+      const visualChunks: string[] = [];
+
+      const result = await chatService.processMessageStream(
+        's1',
+        'Quero resetar o plano',
+        new AbortController().signal,
+        (chunk) => visualChunks.push(chunk),
+      );
+
+      // 1. O onChunk visual recebe apenas o texto pedagógico limpo
+      const combinedVisual = visualChunks.join('');
+      expect(combinedVisual).toBe('Sem problemas, vamos recomeçar do zero.\n\n');
+      expect(combinedVisual).not.toContain('PLANNING_PATCH');
+      expect(combinedVisual).not.toContain('RESET_PLANNING');
+
+      // 2. O update final do conversation no Prisma grava commands com o patch validado e text limpo
+      expect(prismaMock.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ia-1' },
+          data: expect.objectContaining({
+            text: 'Sem problemas, vamos recomeçar do zero.',
+            commands: { operation: 'RESET_PLANNING', data: {} },
+            interrupted: false,
+          }),
+        }),
+      );
+
+      // 3. O StreamResult retorna o patch tipado
+      expect(result.patch).toEqual({
+        operation: 'RESET_PLANNING',
+        data: {},
+      });
+      expect(result.cancelled).toBe(false);
+    });
+
+    it('does not save commands when stream is cancelled/interrupted', async () => {
+      prismaMock.session.findUnique.mockResolvedValue({
+        id: 's1',
+        name: 'Sessão cancelada',
+        conversations: [],
+      });
+
+      prismaMock.conversation.create
+        .mockResolvedValueOnce({ id: 'u-1', text: 'Quero cancelar', type: 'USER', interrupted: false })
+        .mockResolvedValueOnce({ id: 'ia-1', text: '', type: 'IA', interrupted: false });
+
+      prismaMock.conversation.update.mockResolvedValue({
+        id: 'ia-1',
+        text: 'Iniciando resposta...',
+        commands: null,
+        interrupted: true,
+      });
+
+      prismaMock.session.update.mockResolvedValue({});
+
+      const controller = new AbortController();
+
+      aiServiceMock.streamChat.mockImplementation(async (options: any) => {
+        options.onChunk('Iniciando resposta...');
+        controller.abort();
+        throw new Error('AbortError');
+      });
+
+      const result = await chatService.processMessageStream(
+        's1',
+        'Quero cancelar',
+        controller.signal,
+        () => {},
+      );
+
+      expect(result.cancelled).toBe(true);
+      expect(result.patch).toBeNull();
+      expect(prismaMock.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ia-1' },
+          data: expect.objectContaining({
+            commands: null,
+            interrupted: true,
+          }),
+        }),
+      );
     });
   });
 
@@ -419,6 +549,27 @@ describe('ChatService', () => {
 
       expect(filtered).toEqual([
         { role: 'user', text: 'Mensagem válida' },
+      ]);
+    });
+
+    it('limits history to the last 2 turns (4 messages) to avoid context pollution', () => {
+      const conversations = [
+        { id: 'c1', text: 'Turno 1 - User', type: 'USER', interrupted: false },
+        { id: 'c2', text: 'Turno 1 - IA', type: 'IA', interrupted: false },
+        { id: 'c3', text: 'Turno 2 - User', type: 'USER', interrupted: false },
+        { id: 'c4', text: 'Turno 2 - IA', type: 'IA', interrupted: false },
+        { id: 'c5', text: 'Turno 3 - User', type: 'USER', interrupted: false },
+        { id: 'c6', text: 'Turno 3 - IA', type: 'IA', interrupted: false },
+      ] as Conversation[];
+
+      const filtered = filterCleanChatHistory(conversations);
+
+      expect(filtered).toHaveLength(4);
+      expect(filtered).toEqual([
+        { role: 'user', text: 'Turno 2 - User' },
+        { role: 'model', text: 'Turno 2 - IA' },
+        { role: 'user', text: 'Turno 3 - User' },
+        { role: 'model', text: 'Turno 3 - IA' },
       ]);
     });
   });

@@ -21,11 +21,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runner
+      target: development
       args:
         DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-teachy_db}?schema=public
     container_name: teachy_service
     restart: unless-stopped
+    volumes:
+      - .:/app
+      - /app/node_modules
     env_file:
       - .env
     environment:

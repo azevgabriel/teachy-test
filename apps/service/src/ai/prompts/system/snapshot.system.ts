@@ -110,12 +110,17 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
         const evals = b.evaluations && b.evaluations.length > 0
           ? b.evaluations.map((e) => `[${e.instrumentType || 'AVAL'}] ${e.name || 'Sem título'}`).join('; ')
           : 'Nenhuma';
-        const method = b.metodologia ? `Metodologia: "${b.metodologia.slice(0, 120)}${b.metodologia.length > 120 ? '...' : ''}"` : 'Metodologia: Não preenchida';
+        const method = b.metodologia ? `Metodologia/Sequência: "${b.metodologia.slice(0, 120)}${b.metodologia.length > 120 ? '...' : ''}"` : 'Metodologia: Não preenchida';
         const parentInfo = b.parentId ? ` (Pai: ${b.parentId})` : '';
+
+        const blockMetas = b.metadataValues && b.metadataValues.length > 0
+          ? b.metadataValues.map((m) => `${m.specification?.customLabel || m.specification?.colName || 'Meta'}: "${m.textValue || ''}"`).join('; ')
+          : 'Nenhum';
 
         return `  ${idx + 1}. Bloco [${b.granularity || 'BLOCO'}] ID: ${b.id}${parentInfo} | Datas: ${dates} | Ordem: ${b.order ?? 0}
      - ${method}
      - BNCC: ${skills}
+     - Colunas Customizadas EAV: ${blockMetas}
      - Avaliações: ${evals}`;
       })
       .join('\n');
@@ -129,10 +134,36 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
       .map((s) => {
         const label = s.customLabel || s.colName;
         const required = s.isRequired ? ' [OBRIGATÓRIA / Slot-filling]' : '';
-        const scope = s.tableRef === 'PLANNING' ? 'Cabeçalho' : 'Blocos';
-        return `  - "${label}" (colName: ${s.colName}, Escopo: ${scope})${required}${s.description ? `: ${s.description}` : ''}`;
+        const scope = s.tableRef === 'PLANNING' ? 'Cabeçalho (Macro)' : 'Blocos (Diário)';
+        const macroCount = planning.metadataValues?.filter((m) => m.specificationId === s.id).length || 0;
+        const blockCount = blocks.reduce((acc, b) => acc + (b.metadataValues?.filter((m) => m.specificationId === s.id).length || 0), 0);
+        const totalValues = macroCount + blockCount;
+        const status = totalValues > 0
+          ? `✅ [PREENCHIDA: ${totalValues} registro(s)]`
+          : `⚠️ [SEM VALOR CADASTRADO / PENDENTE SLOT-FILLING]`;
+        return `  - "${label}" (colName: ${s.colName}, Escopo: ${scope})${required} ${status}${s.description ? `: ${s.description}` : ''}`;
       })
       .join('\n');
+  }
+
+  // Metadados Macro do Planejamento
+  let macroMetaText = '';
+  if (planning.metadataValues && planning.metadataValues.length > 0) {
+    macroMetaText = planning.metadataValues
+      .map((m) => `  - [${m.specification?.customLabel || m.specification?.colName || 'Metadado'}]: "${m.textValue || '(sem texto)'}"`)
+      .join('\n');
+  } else {
+    macroMetaText = '  *Nenhum metadado de ciclo configurado.*\n';
+  }
+
+  // Avaliações Macro do Planejamento
+  let macroEvalsText = '';
+  if (planning.evaluations && planning.evaluations.length > 0) {
+    macroEvalsText = planning.evaluations
+      .map((e) => `  - [${e.instrumentType || 'AVAL'}] ${e.name || 'Sem título'}${e.criteria ? ` (Critérios: ${e.criteria})` : ''}${e.description ? ` - ${e.description}` : ''}`)
+      .join('\n');
+  } else {
+    macroEvalsText = '  *Nenhuma avaliação de ciclo/geral configurada.*\n';
   }
 
   // Análise de Gaps (Gap Analysis)
@@ -149,9 +180,17 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
     if (unmethod > 0) missingBlocks.push(`${unmethod} bloco(s) sem metodologia`);
   }
 
+  // Gaps de especificações órfãs
+  const orphanSpecs = specifications.filter((s) => {
+    const macroCount = planning.metadataValues?.filter((m) => m.specificationId === s.id).length || 0;
+    const blockCount = blocks.reduce((acc, b) => acc + (b.metadataValues?.filter((m) => m.specificationId === s.id).length || 0), 0);
+    return (macroCount + blockCount) === 0;
+  });
+
   const gapsSummary = [
     ...(missingHeader.length > 0 ? [`Cabeçalho: faltam ${missingHeader.join(', ')}`] : []),
     ...(missingBlocks.length > 0 ? [`Cronograma: faltam ${missingBlocks.join(', ')}`] : []),
+    ...orphanSpecs.map((o) => `Coluna customizada "${o.customLabel || o.colName}" (${o.tableRef}) está SEM NENHUM VALOR. Preencha imediatamente ou solicite o conteúdo ao professor.`),
   ];
 
   return `
@@ -166,6 +205,10 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
 - **Componentes Curriculares:** ${subjects}
 - **Granularidade Macro:** ${granularity}
 - **Período do Ciclo:** ${period}
+- **Metadados do Ciclo (EAV):**
+${macroMetaText}
+- **Avaliações Gerais do Ciclo (Macro):**
+${macroEvalsText}
 
 ## 2. Especificações / Colunas Customizadas Ativas (\`Specification\` EAV)
 ${specsText}
