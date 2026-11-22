@@ -14,15 +14,15 @@ flowchart LR
     Eval -->|planning_block_id XOR| Block["PlanningBlock (Micro Layer)\nPunctual assessments tied to a specific\nmonth, week, or daily lesson."]
 ```
 
-### Scope Examples:
-- **Bound to `Planning` (`planning_id`):**
-  - Qualitative assessments in Early Childhood (developmental and social interaction descriptive reports).
-  - Continuous Processual Assessment (`AP`) throughout High School.
-  - Interdisciplinary trimester projects (`AI` / `PBL`).
-- **Bound to `PlanningBlock` (`planning_block_id`):**
-  - Partial written exam scheduled for the 3rd week of October.
-  - Notebook check on April 15th.
-  - Oral presentation in Friday's double-period block.
+### Scope & Granularity Rules:
+- **General Evaluation (Bound to Macro `Planning`):**
+  - "General" is always bound to the **highest level of granularity** (`Planning`).
+  - When the teacher indicates that *"evaluation is performed generally, not daily"* (e.g. weekly formative evaluation, qualitative Early Childhood reports), the `Evaluation` is bound strictly to the `Planning` header (`planning_id` populated, `planning_block_id = null`).
+  - The AI must not duplicate a general assessment into every child block.
+- **Specific Evaluation (Bound to `PlanningBlock`):**
+  - When an assessment is specific to a sub-cycle (e.g. monthly exam, weekly presentation, or daily classroom check), it is bound to the `PlanningBlock` corresponding to that specific granularity depth (`planning_block_id` populated, `planning_id = null`).
+- **Flexible Coexistence (General + Specific):**
+  - General and specific evaluations can **freely coexist** in the same plan whenever guided by the teacher. For instance, a macro quarterly interdisciplinary project (`Planning`) can legitimately coexist with specific monthly partial exams or daily oral presentations (`PlanningBlock`). The system never deletes specific evaluations unless the teacher explicitly requests their removal.
 
 ---
 

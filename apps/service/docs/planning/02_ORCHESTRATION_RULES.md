@@ -126,6 +126,16 @@ Prior to formulating each response, the AI evaluates the current Snapshot agains
    - Do registered evaluations include clear assessment criteria?
 2. **Surgical Guidance:** The AI leverages this diagnostic to steer the next turn naturally, keeping the co-planning workflow focused on completing the lesson plan with maximum pedagogical rigor.
 
+### C. Sliding Window Context Hygiene (`MAX_CHAT_HISTORY_TURNS = 2`)
+- The active conversation history forwarded to the LLM is restricted to a tight sliding window of the **last 2 turns** (maximum of 4 messages: 2 user inputs and 2 model responses).
+- **Technical Rationale:** Because the PostgreSQL Snapshot serves as the authoritative Single Source of Truth, retaining dozens of historical turns leads to cognitive drag, token bloat, and context contamination with obsolete or discarded proposals.
+
+### D. Continuous Structural Alignment (Database vs Current Dialogue)
+- Prior to outputting any conversational text or patch payload, the AI performs a comparative check between the teacher's latest message and the consolidated Database Snapshot:
+  - Macro-level definitions (e.g. cycle-wide routines, general evaluations, faith-based integration) are anchored strictly at `Planning`.
+  - Lesson-level definitions (e.g. daily content, active methodologies, punctual quizzes) are anchored at their corresponding `PlanningBlock`.
+  - The conversational Markdown and the structured machine patch must remain 100% mirrored and faithful to the relational database structure.
+
 ---
 
 ## 8. Atomic Stream Commit & Mid-Flight Cancellation Resilience

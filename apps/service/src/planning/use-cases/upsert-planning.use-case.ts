@@ -261,17 +261,6 @@ export class UpsertPlanningUseCase {
           });
         }
       }
-
-      // Se a avaliação foi definida no escopo macro e nenhum bloco define avaliações diárias,
-      // limpa avaliações residuais de blocos criadas previamente por engano
-      const hasBlockEvaluations = Boolean(data.blocks?.some((b) => b.evaluations && b.evaluations.length > 0));
-      if (!hasBlockEvaluations) {
-        await this.prisma.evaluation.deleteMany({
-          where: {
-            planningBlock: { planningId: planning.id },
-          },
-        });
-      }
     }
 
     // 6. Criar ou Atualizar Blocos de Planejamento (PlanningBlock)

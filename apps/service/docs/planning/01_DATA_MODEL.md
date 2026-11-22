@@ -43,7 +43,16 @@ The `Planning` model (`plannings`) anchors the highest level of granularity for 
 | `applicationYearId` | `UUID? @map("application_year_id")` | Normalizes the target grade, age bracket, or educational stage (`ApplicationYear`), restricting eligible BNCC skills. |
 | `startAt` | `DateTime? @map("start_at")` | Overall cycle start date (inferred by the AI or specified by the teacher). |
 | `endAt` | `DateTime? @map("end_at")` | Overall cycle end date. |
-| `granularity` | `Enum PlanningGranularity?` | Macro planning granularity: `ANNUAL`, `SEMESTER`, `TRIMESTER`, `BIMONTHLY`, `MONTHLY`, `WEEKLY`, `DAILY`, `CUSTOM`. |
+| `granularity` | `Enum PlanningGranularity?` | Macro planning granularity: `ANNUAL`, `SEMESTER`, `TRIMESTER`, `BIMONTHLY`, `MONTHLY`, `WEEKLY`, `DAILY`, `CUSTOM`. **Always reflects the highest level of granularity of the entire plan** (the macro scope container). |
+
+> [!IMPORTANT]
+> **Macro Granularity Principle (`Planning.granularity`):**
+> The `Planning` model represents the outermost scope container of the planning. The highest granularity is **always** assigned to `Planning`.
+> - If the teacher requests a **Trimester** to be divided into Monthly and then Weekly blocks:
+>   `Planning` (`TRIMESTER`) $\rightarrow$ `PlanningBlock` (`MONTHLY`) $\rightarrow$ `PlanningBlock` (`WEEKLY`, with `parentId` referencing the month).
+> - If the teacher requests a **1-week** plan composed of 5 daily lessons/experiences:
+>   `Planning` (`WEEKLY`) $\rightarrow$ `PlanningBlock` (`DAILY`, with `order` or `startAt`).
+> - A `Planning.granularity` of `DAILY` is reserved **exclusively** for single, standalone 1-day lesson plans. When a plan spans multiple days or 1 full week, the macro `Planning` granularity is **`WEEKLY`**, never `DAILY`.
 
 ### Macro Header Relations
 - **`curricularComponents` (N:N Relation):** Connects subjects covered by the plan (e.g. Portuguese, Mathematics, History).
@@ -77,7 +86,15 @@ The `order: Int @default(0)` field guarantees deterministic ordering between sib
 - Non-dated lesson sequences (e.g. "Lesson 1 — Introduction", "Lesson 2 — Guided Practice").
 
 ### Fixed Methodology Column
-The `metodologia: Text?` field is kept as a dedicated physical column in `planning_blocks` because it was present in 100% of validated pedagogical models under slight naming variations (*"Didactic Sequence"*, *"Methodology (P, O, A & Av)"*, *"Lesson Development"*).
+The `metodologia: Text?` field is kept as a dedicated physical column in `planning_blocks` because it was present in 100% of validated pedagogical models under slight naming variations (*"Didactic Sequence"*, *"Active Methodology"*, *"Methodology (P, O, A & Av)"*, *"Lesson Development"*, *"Didactic Practice"*, *"Step-by-Step Experience"*).
+
+> [!WARNING]
+> **Anti-Lumping Invariant (`metodologia` vs `Specification`):**
+> The physical `metodologia` column stores **strictly the lesson's active methodology / didactic sequence / classroom development** (or pedagogically close concepts like welcoming circle, sensorial exploration, quiet transition).
+> - When the teacher specifies an authoring structure with multiple discrete columns (e.g. *Date/Topic, Content, Learning Objectives, Didactic Sequence*):
+>   1. The `metodologia` column receives **only the didactic sequence**.
+>   2. **It is strictly forbidden to lump multiple columns together into `metodologia`** (e.g. bundling `"Content: ... Objectives: ... Sequence: ..."` into a single text blob).
+>   3. Each additional column requested (such as *"Content"* or *"Teaching Resources"*) must be modeled cleanly as a `Specification` (`tableRef: "PLANNING_BLOCK"`, `customLabel: "Conteúdo"`), persisting its discrete values into `PlanningMetadataValue` for each respective daily block.
 
 ---
 
@@ -109,13 +126,17 @@ classDiagram
 ### A. Specifications Table (`Specification`)
 Defines the contract and definition mold for a field within the active session:
 - **`tableRef` (`SpecificationTableRef`):** Scope of action:
-  - `PLANNING`: Macro header metadata.
-  - `PLANNING_BLOCK`: Lesson / block metadata.
+  - **`PLANNING` (Macro / Cycle Scope):** Used whenever the metadata applies to the cycle or week as a whole (e.g. *Weekly Christian Application*, *General Weekly Routine*, *Trimester Objectives*).
+  - **`PLANNING_BLOCK` (Micro / Lesson Scope):** Used whenever the metadata varies per individual lesson or day (e.g. *Daily Content*, *Lesson Resources*, *Homework*).
 - **`isRequired` (`Boolean @default(false)`):** Marks whether this field is mandatory for the school/session. When `true`, triggers mandatory AI slot-filling.
 - **Dual Semantics of `colName`:**
   1. *Native Column Override:* When `colName` matches a fixed native column (e.g. `metodologia`), the specification only changes the display label (`customLabel = "Sequência Didática"`). **Generates 0 rows in `PlanningMetadataValue`**, persisting data directly into the physical column.
   2. *Custom Dynamic Field:* When `colName` does not exist on the fixed table (e.g. `recursos_didaticos`, `aplicacao_crista`), the specification generates **1 or more rows in `PlanningMetadataValue`**.
 - **`description`:** Pedagogical instructions on how the field should be authored (fed directly into AI system prompts).
+
+> [!IMPORTANT]
+> **Zero Orphan Specifications Invariant:**
+> A `Specification` mold must **never** exist in the database without populated values in `PlanningMetadataValue` (unless waiting for teacher input during active slot-filling). When a custom column is registered, the AI must provide its content immediately (via `initialValue` or `metadataValues`) or explicitly prompt the teacher for the missing data. Unused or abandoned specifications must be deleted to prevent orphaned molds.
 
 ### B. Metadata Value Persistence (`PlanningMetadataValue`)
 Stores the actual content authored by the teacher:

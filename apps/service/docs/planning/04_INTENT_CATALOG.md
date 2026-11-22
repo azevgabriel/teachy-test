@@ -27,10 +27,11 @@ flowchart TD
 ---
 
 ## 0. Initial Setup & Definitive Parameters (`UPSERT_PLANNING`)
-* **Teacher Command:** *"I want to create a monthly math plan for the 3rd grade covering BNCC skills EF03MA01 and EF03MA02"*.
+* **Teacher Command:** *"I want to create a monthly math plan for the 3rd grade covering BNCC skills EF03MA01 and EF03MA02, with a column for Content and Didactic Sequence"*.
 * **AI Behavior:**
   - Detects consolidated planning parameters (subject, grade level, cycle granularity, dates, and BNCC objectives).
-  - Emits the `UPSERT_PLANNING` payload containing header fields, connected curricular components, macro `learningObjectives`, and initial skeleton `planning_blocks`.
+  - Emits the `UPSERT_PLANNING` payload containing header fields, connected curricular components, macro `learningObjectives`, macro `evaluations`, and child `planning_blocks`.
+  - Supports embedding `specifications` and `metadataValues` at macro level as well as within individual blocks (`blocks[i].metadataValues`).
 * **Prisma Operation:**
   ```typescript
   await prisma.planning.upsert({
@@ -45,6 +46,9 @@ flowchart TD
       },
       learningObjectives: {
         create: bnccSkillIds.map((skillId) => ({ bnccSkillId: skillId })),
+      },
+      evaluations: {
+        create: macroEvaluationsData,
       },
     },
     update: {
@@ -76,13 +80,12 @@ flowchart TD
 ---
 
 ## 2. Column Addition with Disambiguation (`ADD_SPECIFICATION_PENDING`)
-* **Teacher Command:** *"Add a column for teaching resources"*.
+* **Teacher Command:** *"Add a column for Christian Application (general for the week)"* or *"Add a teaching resources column for the months"*.
 * **AI Behavior:**
-  - Identifies that "teaching resources" is not a native column and that the current plan contains multiple tiers (e.g. Trimester $\rightarrow$ Monthly $\rightarrow$ Daily).
-  - Clarifies scope: *"Would you like teaching resources for the entire trimester (header), for each month (Jan, Feb, Mar), or for each daily lesson?"*.
-  - Upon answer (*"Just for the months"*), creates the `Specification` (`table_ref = PLANNING_BLOCK`, `isRequired = true`).
-  - **Mandatory Slot-Filling:** Promptly follows up: *"What resources will you be using in January, February, and March?"*.
-  - Records answers in `PlanningMetadataValue`.
+  - Evaluates whether the requested column is for the macro cycle (`tableRef: "PLANNING"`) or varies per block/day (`tableRef: "PLANNING_BLOCK"`).
+  - Clarifies scope if ambiguous: *"Would you like teaching resources for the entire trimester (header) or for each daily lesson?"*.
+  - Creates the `Specification` mold with `initialValue` to immediately persist the `PlanningMetadataValue`, preventing orphan specifications.
+  - If content is not provided upfront, immediately initiates slot-filling in the dialogue.
 
 ---
 
