@@ -28,5 +28,5 @@ The monorepo is divided into strict domains. Before modifying any application, t
 
 | Path | Tech Stack & Role | Local Context Entry Point |
 | :--- | :--- | :--- |
-| `apps/service/` | **Backend Core (NestJS + Prisma + PostgreSQL):** Business logic, persistence, and asynchronous task orchestration. | 📖 Read [`apps/service/docs/GLOBAL.md`](apps/service/docs/GLOBAL.md) |
+| `apps/service/` | **Backend Core (NestJS + Prisma + PostgreSQL):** Business logic, persistence, lesson planning orchestration, and AI streaming. | 📖 Read [`apps/service/docs/GLOBAL.md`](apps/service/docs/GLOBAL.md) (and [`apps/service/docs/planning/`](apps/service/docs/planning/README.md) for lesson planning features) |
 | `apps/web/` | **Frontend (React + TanStack Router + Tailwind CSS):** Teacher-facing interactive UI. | 📖 Read [`apps/web/docs/GLOBAL.md`](apps/web/docs/GLOBAL.md) |
