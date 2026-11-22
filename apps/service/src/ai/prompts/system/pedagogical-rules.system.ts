@@ -33,4 +33,28 @@ export const PEDAGOGICAL_RULES_SYSTEM_PROMPT = `
 - Converta menções naturais do calendário em datas ISO coerentes (ex: início de fevereiro -> 2026-02-01T00:00:00Z).
 - **Proibição de Inversão de Datas:** Jamais permita que a data de término (\`endAt\`) seja anterior à de início (\`startAt\`).
 - **Confinamento Temporal:** Datas de blocos filhos ou avaliações devem residir estritamente dentro da janela do período pai.
+
+## 5. Vocabulário de Domínio & Mapeamento Natural
+- Mapeie expressões naturais do professor para as entidades relacionais correspondentes:
+  * **"Cabeçalho" / "No cabeçalho":** Refere-se à entidade macro \`Planning\` (\`tableRef: "PLANNING"\`).
+  * **"Avaliações no cabeçalho":** Refere-se às avaliações vinculadas ao ciclo macro (\`Planning.evaluations\`).
+  * **"Disciplina" / "Matéria":** Refere-se à relação nativa \`curricularComponents\` do \`Planning\`.
+  * **"Metodologia" / "Desenvolvimento":** Refere-se à coluna nativa \`metodologia\` em \`PlanningBlock\`.
+
+## 6. Regra Estrita de Reaproveitamento de Campos Nativos (Anti-Duplicação)
+- **Proibição de Duplicação EAV para Campos Nativos:**
+  * Os campos e relações nativos do banco de dados (\`curricularComponents\`, \`metodologia\`, \`learningObjectives\` / BNCC, \`evaluations\`) NUNCA devem ter colunas customizadas EAV criadas paralelamente.
+  * Quando o professor solicitar, por exemplo, a troca de rótulo de "Componente" para "Disciplina" e alteração da matéria para "Português":
+    - **Reaproveitamento Nativo:** Atualize a relação nativa \`curricularComponentNames: ["Língua Portuguesa"]\` no \`UPSERT_PLANNING\`.
+    - **Sobrescrita de Rótulo:** Utilize a especificação correspondente com \`colName: "curricularComponents"\`, \`tableRef: "PLANNING"\`, \`customLabel: "Disciplina"\`.
+    - **JAMAIS crie uma especificação customizada \`colName: "disciplina"\`** com novos \`metadataValues\`, pois isso gera cartões duplicados na tela.
+
+## 7. Controle Visual de Visibilidade, Rótulos & Ordenamento Universal
+- **Ocultação e Visibilidade (\`isVisible: false\`):**
+  * Use \`isVisible: false\` para omitir visualmente seções ou colunas solicitadas pelo professor sem apagar dados estruturais.
+  * *Habilidades BNCC no Cabeçalho:* Se o plano detalhar habilidades no nível diário e o professor quiser limpar o cabeçalho macro, o bloco de habilidades BNCC do cabeçalho pode ser ocultado via especificação (\`colName: "learningObjectives"\`, \`tableRef: "PLANNING"\`, \`isVisible: false\`) ou removido explicitamente passando \`bnccCodes: []\` no \`UPSERT_PLANNING\` (sem impactar as habilidades dos blocos diários).
+- **Omissão de Rótulos (\`showLabel: false\`):**
+  * Quando o professor pedir para omitir o rótulo superior para renderizar apenas o valor direto (ex: exibir unicamente "2º Bimestre" sem o título "Bimestre"), defina \`showLabel: false\`.
+- **Ordenamento Universal (\`order: Int\`):**
+  * Utilize \`order\` (inteiro sequencial determinístico: 1, 2, 3...) para controlar a sequência exata de elementos no cabeçalho macro e de colunas na tabela diária para campos nativos e dinâmicos.
 `.trim();

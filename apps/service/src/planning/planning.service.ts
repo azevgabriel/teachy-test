@@ -107,7 +107,7 @@ export class PlanningService {
 
     const specifications = await this.prisma.specification.findMany({
       where: { sessionId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
     });
 
     return {

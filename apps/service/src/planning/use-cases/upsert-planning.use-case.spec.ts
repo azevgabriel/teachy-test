@@ -173,4 +173,99 @@ describe('UpsertPlanningUseCase', () => {
       },
     });
   });
+
+  it('remove todas as habilidades BNCC macro do cabeçalho quando bnccCodes: [] for explicitamente enviado', async () => {
+    const existingPlanning = {
+      id: 'plan-1',
+      sessionId: 'session-1',
+      applicationYearId: 'year-em-3',
+    };
+    prismaMock.planning.findFirst.mockResolvedValue(existingPlanning);
+    prismaMock.planning.update.mockResolvedValue(existingPlanning);
+
+    await useCase.execute('session-1', {
+      bnccCodes: [],
+    });
+
+    expect(prismaMock.learningObjective.deleteMany).toHaveBeenCalledWith({
+      where: { planningId: 'plan-1' },
+    });
+  });
+
+  it('persiste order, isVisible e showLabel no upsert de especificações', async () => {
+    const existingPlanning = {
+      id: 'plan-1',
+      sessionId: 'session-1',
+    };
+    prismaMock.planning.findFirst.mockResolvedValue(existingPlanning);
+    prismaMock.planning.update.mockResolvedValue(existingPlanning);
+
+    // 1. Criação de nova especificação com campos customizados
+    prismaMock.specification.findFirst.mockResolvedValue(null);
+
+    await useCase.execute('session-1', {
+      specifications: [
+        {
+          colName: 'disciplina',
+          customLabel: 'Disciplina',
+          tableRef: 'PLANNING',
+          order: 1,
+          isVisible: true,
+          showLabel: false,
+          isRequired: false,
+        },
+      ],
+    });
+
+    expect(prismaMock.specification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        colName: 'disciplina',
+        customLabel: 'Disciplina',
+        tableRef: 'PLANNING',
+        order: 1,
+        isVisible: true,
+        showLabel: false,
+        isRequired: false,
+      }),
+    });
+
+    // 2. Atualização de especificação existente
+    const existingSpec = {
+      id: 'spec-1',
+      sessionId: 'session-1',
+      colName: 'disciplina',
+      customLabel: 'Componente',
+      tableRef: 'PLANNING',
+      order: 0,
+      isVisible: true,
+      showLabel: true,
+      isRequired: false,
+    };
+    prismaMock.specification.findFirst.mockResolvedValue(existingSpec);
+
+    await useCase.execute('session-1', {
+      specifications: [
+        {
+          colName: 'disciplina',
+          customLabel: 'Disciplina',
+          tableRef: 'PLANNING',
+          order: 2,
+          isVisible: false,
+          showLabel: false,
+          isRequired: true,
+        },
+      ],
+    });
+
+    expect(prismaMock.specification.update).toHaveBeenCalledWith({
+      where: { id: 'spec-1' },
+      data: expect.objectContaining({
+        customLabel: 'Disciplina',
+        order: 2,
+        isVisible: false,
+        showLabel: false,
+        isRequired: true,
+      }),
+    });
+  });
 });

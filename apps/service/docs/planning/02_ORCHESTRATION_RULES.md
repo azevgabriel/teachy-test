@@ -32,6 +32,7 @@ flowchart TD
 ### Golden Rules of Granularity:
 - **TRIMESTER:** Descends at most 2 levels (**Trimester $\rightarrow$ Monthly $\rightarrow$ Weekly**). Generating 60 to 80 daily lessons at once exhausts model context, causes hallucinations, and overwhelms the teacher. BNCC skills remain associated with weekly or monthly blocks.
 - **WEEKLY:** Focuses on concrete classroom execution: each daily `PlanningBlock` receives a BNCC code (`learning_objectives`), didactic sequence (`metodologia`), and assessment instrument (`evaluations`).
+- **Macro BNCC Cleanup in Daily Plans:** When plans descend to surgical daily granularity, accumulating all BNCC skills at the macro header creates visual noise and redundancy. The AI supports clearing macro header skills via `bnccCodes: []` in `UPSERT_PLANNING` (deleting only macro objectives while preserving all daily block objectives) or concealing them via `isVisible: false` on the macro specification.
 
 ---
 
@@ -139,16 +140,38 @@ Planning modifications are strictly decoupled from mid-flight streaming:
 
 ---
 
-## 9. O Princípio da Linha d'Água (Watermark Boundary) no Histórico Pós-Reset
+## 9. The Watermark Boundary Principle in Post-Reset History
 
-### A. O Desafio da Contaminação de Contexto Pós-Reset
-Mesmo que o banco de dados seja limpo via `RESET_PLANNING`, uma janela deslizante ingênua (ex.: `conversations.slice(-4)`) enviaria mensagens do plano antigo para a LLM e para a busca prévia de BNCC. Isso fazia a IA continuar insistindo em termos anteriores (ex.: "Educação Infantil", "bebês") mesmo após o professor pedir para mudar de rumo.
+### A. The Challenge of Post-Reset Context Contamination
+Even when the database is purged via `RESET_PLANNING`, a naive sliding conversation window (e.g. `conversations.slice(-4)`) would still feed messages from the discarded plan into the LLM and the pre-search BNCC keyword extractor. This caused the AI to persist with obsolete terms (e.g. "Early Childhood", "infants") even after the teacher switched to a completely different grade.
 
-### B. Demarcação por Linha d'Água (Watermark)
-- Quando um comando de recomeço (`RESET_PLANNING`) ocorre na sessão (registrado em `Conversation.commands` ou acionado por intenção de recomeço):
-  * Estabelece-se uma **Linha d'Água temporal (*Watermark Boundary*)**.
-  * **Todas as mensagens anteriores ao recomeço são sumariamente eliminadas** da janela enviada à LLM e do extrator prévio de palavras-chave.
-  * O histórico conversacional recomeça estritamente a partir do comando de recomeço, garantindo que o novo plano inicie 100% limpo ("zerado").
+### B. Watermark Demarcation
+- Whenever a reset command (`RESET_PLANNING`) occurs in the session:
+  * A temporal **Watermark Boundary** is established.
+  * **All messages prior to the reset point are pruned** from the context window supplied to the LLM and the keyword extractor.
+  * The conversational timeline restarts strictly from the reset command, guaranteeing a 100% clean slate.
 
-### C. Transição Imediata de Rumo sem Atrito (Anti-Insistência)
-Quando o professor indica uma mudança de rumo (ex.: *"Não vamos manter o infantil, vamos mudar para o 3º ano do EM"*), o modelo deve acolher imediatamente a nova escolha sem insistir em confirmações repetitivas sobre o contexto descartado, emitindo prontamente o patch `UPSERT_PLANNING` com a nova etapa do catálogo oficial.
+### C. Immediate Direction Shift Without Friction (Anti-Insistence)
+When the teacher redirects the plan (e.g. *"Let's not do Early Childhood; let's switch to 3rd year of High School"*), the model must welcome the new choice immediately without badgering the educator with repetitive confirmations about the discarded context, promptly emitting `UPSERT_PLANNING` with the new official catalog stage.
+
+---
+
+## 10. Domain Vocabulary Mapping & Native Overrides (Anti-Duplication)
+
+### A. Natural Vocabulary Translation
+Teachers communicate using everyday layout and didactic terminology rather than relational database terms:
+- **"Header" / "At the top" / "Macro":** Maps to the `Planning` entity (`tableRef: "PLANNING"`).
+- **"Evaluations in header":** Maps to `Planning.evaluations` at the cycle level.
+- **"Subject" / "Discipline" (*"Disciplina"* / *"Matéria"*):** Maps to the native relation `Planning.curricularComponents`.
+- **"Didactic Sequence" / "Development":** Maps to the native column `PlanningBlock.metodologia`.
+
+### B. Strict Native Field Override Invariant
+Native relational entities (`curricularComponents`, `metodologia`, `evaluations`, `learningObjectives`) must never be duplicated into custom EAV tables:
+- When a teacher requests renaming "Componente" to "Disciplina" and changing the subject:
+  1. The AI updates the native relation via `curricularComponentNames: ["Língua Portuguesa"]` in `UPSERT_PLANNING`.
+  2. The AI updates the specification display mold (`colName: "curricularComponents"`, `customLabel: "Disciplina"`, `tableRef: "PLANNING"`).
+  3. **Zero rows are generated in `PlanningMetadataValue`**. Generating an ad-hoc EAV specification `colName: "disciplina"` is strictly prohibited as it produces duplicate cards on screen.
+
+### C. Visual Presentation Modifiers (`showLabel: false` and `order`)
+- **Label Suppression (`showLabel: false`):** Enables direct value rendering (e.g. showing `"2º Bimestre"` directly without the top `"Bimestre"` label).
+- **Deterministic Universal Ordering (`order: Int`):** Controls the sequence of macro header cards and daily table columns deterministically.

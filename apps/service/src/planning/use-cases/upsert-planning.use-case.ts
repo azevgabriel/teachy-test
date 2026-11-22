@@ -104,35 +104,42 @@ export class UpsertPlanningUseCase {
     }
 
     // 5. Vincular Habilidades BNCC Macro (LearningObjective XOR: planning_id preenchido)
-    if (data.bnccCodes && data.bnccCodes.length > 0) {
-      const skills = await this.prisma.bnccSkill.findMany({
-        where: { code: { in: data.bnccCodes } },
-      });
+    if (data.bnccCodes !== undefined) {
+      if (data.bnccCodes.length === 0) {
+        // Exclusão explícita de habilidades macro do cabeçalho (sem afetar blocos)
+        await this.prisma.learningObjective.deleteMany({
+          where: { planningId: planning.id },
+        });
+      } else {
+        const skills = await this.prisma.bnccSkill.findMany({
+          where: { code: { in: data.bnccCodes } },
+        });
 
-      // Sincroniza habilidades macro: remove as que não estão mais presentes na lista informada
-      const activeSkillIds = skills.map((s) => s.id);
-      await this.prisma.learningObjective.deleteMany({
-        where: {
-          planningId: planning.id,
-          bnccSkillId: { notIn: activeSkillIds },
-        },
-      });
-
-      for (const skill of skills) {
-        const existing = await this.prisma.learningObjective.findFirst({
+        // Sincroniza habilidades macro: remove as que não estão mais presentes na lista informada
+        const activeSkillIds = skills.map((s) => s.id);
+        await this.prisma.learningObjective.deleteMany({
           where: {
             planningId: planning.id,
-            bnccSkillId: skill.id,
+            bnccSkillId: { notIn: activeSkillIds },
           },
         });
-        if (!existing) {
-          await this.prisma.learningObjective.create({
-            data: {
+
+        for (const skill of skills) {
+          const existing = await this.prisma.learningObjective.findFirst({
+            where: {
               planningId: planning.id,
               bnccSkillId: skill.id,
-              planningBlockId: null, // Garante constraint XOR
             },
           });
+          if (!existing) {
+            await this.prisma.learningObjective.create({
+              data: {
+                planningId: planning.id,
+                bnccSkillId: skill.id,
+                planningBlockId: null, // Garante constraint XOR
+              },
+            });
+          }
         }
       }
     }
@@ -153,6 +160,9 @@ export class UpsertPlanningUseCase {
               tableRef: specData.tableRef,
               description: specData.description || existingSpec.description,
               isRequired: specData.isRequired ?? existingSpec.isRequired,
+              order: specData.order !== undefined ? specData.order : existingSpec.order,
+              isVisible: specData.isVisible !== undefined ? specData.isVisible : existingSpec.isVisible,
+              showLabel: specData.showLabel !== undefined ? specData.showLabel : existingSpec.showLabel,
             },
           });
         } else {
@@ -164,6 +174,9 @@ export class UpsertPlanningUseCase {
               tableRef: specData.tableRef,
               description: specData.description || null,
               isRequired: specData.isRequired ?? false,
+              order: specData.order ?? 0,
+              isVisible: specData.isVisible ?? true,
+              showLabel: specData.showLabel ?? true,
             },
           });
         }
