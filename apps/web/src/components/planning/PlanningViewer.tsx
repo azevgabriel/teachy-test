@@ -92,6 +92,15 @@ export function PlanningViewer({
 			: EMPTY_SPECS;
 	const hasBlocks = (planning?.blocks?.length ?? 0) > 0;
 
+	const methodologySpec = specifications.find(
+		(s) =>
+			s.tableRef === "PLANNING_BLOCK" &&
+			s.colName.toLowerCase() === "metodologia",
+	);
+	const showMethodology = methodologySpec
+		? methodologySpec.isVisible !== false
+		: true;
+
 	// Monitora ativamente o redimensionamento do painel e do navegador via ResizeObserver
 	React.useEffect(() => {
 		const el = containerRef.current;
@@ -648,6 +657,7 @@ export function PlanningViewer({
 													dateRange={item.dateRange}
 													isContinuation={item.isContinuation}
 													parentBlock={item.parentBlock}
+													showMethodology={showMethodology}
 												/>
 											);
 										}
@@ -720,6 +730,7 @@ export function PlanningViewer({
 							<SectionDivider
 								title="Medição da Seção"
 								breadcrumbs={["Nível 1", "Nível 2"]}
+								showMethodology={showMethodology}
 							/>
 						</div>
 

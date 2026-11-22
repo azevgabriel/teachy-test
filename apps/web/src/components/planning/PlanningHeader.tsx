@@ -126,7 +126,13 @@ export function PlanningHeader({
 			? `Plano de Ensino — ${planning.curricularComponents.map((c) => c.name).join(", ")}`
 			: "Plano de Ensino");
 
-	const documentSubtitle = planning.applicationYear?.name || null;
+	const showYear =
+		Boolean(planning.applicationYear?.name) &&
+		(yearSpec ? yearSpec.isVisible !== false : true);
+
+	const documentSubtitle = showYear
+		? planning.applicationYear?.name || null
+		: null;
 
 	const periodText =
 		planning.startAt && planning.endAt
@@ -155,7 +161,7 @@ export function PlanningHeader({
 	// 1. Componentes Curriculares
 	const showComponent =
 		(planning.curricularComponents?.length || 0) > 0 &&
-		(componentSpec ? (componentSpec.isVisible ?? true) : true);
+		(componentSpec ? componentSpec.isVisible !== false : true);
 	if (showComponent) {
 		gridItems.push({
 			id: "header-component",
@@ -169,9 +175,6 @@ export function PlanningHeader({
 	}
 
 	// 2. Ano / Etapa de Aplicação
-	const showYear =
-		Boolean(planning.applicationYear?.name) &&
-		(yearSpec ? (yearSpec.isVisible ?? true) : true);
 	if (showYear) {
 		gridItems.push({
 			id: "header-year",
@@ -186,7 +189,7 @@ export function PlanningHeader({
 	// 3. Escola / Instituição
 	const showSchool =
 		Boolean(planning.school?.name) &&
-		(schoolSpec ? (schoolSpec.isVisible ?? true) : true);
+		(schoolSpec ? schoolSpec.isVisible !== false : true);
 	if (showSchool) {
 		gridItems.push({
 			id: "header-school",
@@ -200,7 +203,7 @@ export function PlanningHeader({
 
 	// 4. Período / Cronograma
 	const showPeriod =
-		Boolean(periodText) && (periodSpec ? (periodSpec.isVisible ?? true) : true);
+		Boolean(periodText) && (periodSpec ? periodSpec.isVisible !== false : true);
 	if (showPeriod) {
 		gridItems.push({
 			id: "header-period",
@@ -220,21 +223,39 @@ export function PlanningHeader({
 
 	for (const spec of headerSpecs) {
 		const isNativeOverride = [
+			"titulo",
+			"title",
+			"plano",
+			"nome",
 			"curricularcomponents",
 			"componente",
+			"disciplina",
+			"materia",
 			"applicationyear",
 			"ano",
+			"etapa",
+			"serie",
+			"turma",
 			"school",
 			"escola",
+			"instituicao",
+			"rede",
 			"startat",
 			"endat",
 			"periodo",
 			"period",
+			"datas",
+			"cronograma",
 			"learningobjectives",
+			"habilidades_bncc",
 			"bncc",
+			"habilidades",
+			"objetivos_aprendizagem",
 			"evaluations",
 			"avaliacao",
 			"avaliacoes",
+			"instrumento_avaliacao",
+			"como_avaliar",
 		].includes(spec.colName.toLowerCase());
 
 		if (isNativeOverride) continue;
@@ -271,7 +292,7 @@ export function PlanningHeader({
 	const showBncc =
 		Boolean(
 			planning.learningObjectives && planning.learningObjectives.length > 0,
-		) && (bnccHeaderSpec ? (bnccHeaderSpec.isVisible ?? true) : true);
+		) && (bnccHeaderSpec ? bnccHeaderSpec.isVisible !== false : true);
 	const bnccHeaderLabel =
 		bnccHeaderSpec?.customLabel ||
 		bnccHeaderSpec?.colName ||
@@ -313,7 +334,7 @@ export function PlanningHeader({
 
 	const showEval =
 		Boolean(planning.evaluations && planning.evaluations.length > 0) &&
-		(evalHeaderSpec ? (evalHeaderSpec.isVisible ?? true) : true);
+		(evalHeaderSpec ? evalHeaderSpec.isVisible !== false : true);
 	const evalHeaderLabel =
 		evalHeaderSpec?.customLabel ||
 		evalHeaderSpec?.colName ||

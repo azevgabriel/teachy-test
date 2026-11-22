@@ -209,7 +209,7 @@ export function PlanningTableChunk({
 				"identificacao",
 			].includes(s.colName.toLowerCase()),
 	);
-	const showOrder = orderSpec ? (orderSpec.isVisible ?? true) : true;
+	const showOrder = orderSpec ? orderSpec.isVisible !== false : true;
 	const orderLabel = resolveOrderColumnHeader(dataset, orderSpec);
 
 	// 2. Metodologia / Sequência Didática
@@ -220,7 +220,7 @@ export function PlanningTableChunk({
 	);
 	const hasMethodology = dataset.some((b) => Boolean(b.metodologia?.trim()));
 	const showMethodology = methodologySpec
-		? (methodologySpec.isVisible ?? true)
+		? methodologySpec.isVisible !== false
 		: hasMethodology;
 	const methodologyLabel =
 		methodologySpec?.customLabel ||
@@ -243,7 +243,7 @@ export function PlanningTableChunk({
 		(b) => b.learningObjectives && b.learningObjectives.length > 0,
 	);
 	const showBncc = bnccSpec
-		? (bnccSpec.isVisible ?? true)
+		? bnccSpec.isVisible !== false
 		: hasLearningObjectives;
 	const bnccLabel =
 		bnccSpec?.customLabel || bnccSpec?.colName || "Habilidades BNCC";
@@ -263,38 +263,41 @@ export function PlanningTableChunk({
 		(b) => b.evaluations && b.evaluations.length > 0,
 	);
 	const showEvaluations = evalSpec
-		? (evalSpec.isVisible ?? true)
+		? evalSpec.isVisible !== false
 		: hasEvaluations;
 	const evalLabel = evalSpec?.customLabel || evalSpec?.colName || "Avaliação";
 
 	// 5. Colunas Dinâmicas EAV definidas pelo usuário
-	const dynamicBlockSpecs = specifications.filter(
-		(s) =>
-			s.tableRef === "PLANNING_BLOCK" &&
-			(s.isVisible ?? true) &&
-			![
-				"metodologia",
-				"order",
-				"startat",
-				"endat",
-				"evaluations",
-				"avaliacao",
-				"avaliacoes",
-				"learningobjectives",
-				"habilidades_bncc",
-				"bncc",
-				"habilidades",
-				"objetivos_aprendizagem",
-				"identificacao",
-				"aula",
-				"aulas",
-				"data",
-				"datas",
-				"periodo",
-				"semana",
-				"bimestre",
-			].includes(s.colName.toLowerCase()),
-	);
+	const dynamicBlockSpecs = specifications
+		.filter(
+			(s) =>
+				s.tableRef === "PLANNING_BLOCK" &&
+				s.isVisible !== false &&
+				![
+					"metodologia",
+					"order",
+					"startat",
+					"endat",
+					"evaluations",
+					"avaliacao",
+					"avaliacoes",
+					"instrumento_avaliacao",
+					"learningobjectives",
+					"habilidades_bncc",
+					"bncc",
+					"habilidades",
+					"objetivos_aprendizagem",
+					"identificacao",
+					"aula",
+					"aulas",
+					"data",
+					"datas",
+					"periodo",
+					"semana",
+					"bimestre",
+				].includes(s.colName.toLowerCase()),
+		)
+		.sort((a, b) => (a.order ?? 4) - (b.order ?? 4));
 
 	// Montagem unificada das colunas respeitando spec.order dinamicamente
 	const columns: TableColumn[] = [];
@@ -520,6 +523,7 @@ interface SectionDividerProps {
 	dateRange?: string;
 	isContinuation?: boolean;
 	parentBlock?: PlanningBlockWithRelations;
+	showMethodology?: boolean;
 }
 
 export function SectionDivider({
@@ -528,6 +532,7 @@ export function SectionDivider({
 	dateRange,
 	isContinuation,
 	parentBlock,
+	showMethodology = true,
 }: SectionDividerProps) {
 	return (
 		<div className="pb-1 mb-2 border-b-2 border-slate-800 text-slate-900">
@@ -560,8 +565,8 @@ export function SectionDivider({
 				)}
 			</div>
 
-			{/* Metodologia Pedagógica do Bloco Pai (se houver e não for continuação) */}
-			{!isContinuation && parentBlock?.metodologia && (
+			{/* Metodologia Pedagógica do Bloco Pai (se houver e não for continuação e metodologia estiver visível) */}
+			{!isContinuation && showMethodology && parentBlock?.metodologia && (
 				<p className="text-[10px] text-slate-600 italic mt-1 leading-snug">
 					{parentBlock.metodologia}
 				</p>
