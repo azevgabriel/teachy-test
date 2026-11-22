@@ -7,3 +7,4 @@ export * from './delete-block.use-case.js';
 export * from './reorganize-hierarchy.use-case.js';
 export * from './reset-planning.use-case.js';
 export * from './reallocate-lessons.use-case.js';
+export * from './export-planning.use-case.js';

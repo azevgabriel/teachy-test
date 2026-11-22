@@ -2,6 +2,7 @@ import {
 	AlertCircle,
 	Download,
 	FileSpreadsheet,
+	FileText,
 	PanelLeftClose,
 	PanelLeftOpen,
 	RectangleHorizontal,
@@ -71,7 +72,9 @@ export function PlanningViewer({
 }: PlanningViewerProps) {
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const [containerWidth, setContainerWidth] = React.useState<number>(0);
-	const [isExporting, setIsExporting] = React.useState(false);
+	const [exportingFormat, setExportingFormat] = React.useState<
+		"pdf" | "docx" | null
+	>(null);
 	const [orientation, setOrientation] =
 		React.useState<PageOrientation>("portrait");
 	const [zoomMode, setZoomMode] = React.useState<"fit" | "100">("fit");
@@ -231,17 +234,114 @@ export function PlanningViewer({
 		);
 	}, [planning, specifications, orientation, measuredHeights]);
 
-	const handleExportPdf = async () => {
+	const handleExport = async (format: "pdf" | "docx") => {
 		if (!sessionId) return;
-		setIsExporting(true);
+		setExportingFormat(format);
 
 		try {
-			// Aciona o endpoint do backend com a orientação escolhida
-			const url = `/api/sessions/${sessionId}/planning/pdf?orientation=${orientation}`;
-			const res = await fetch(url);
+			let res: Response;
+
+			if (format === "pdf" && containerRef.current) {
+				const sheetElements =
+					containerRef.current.querySelectorAll(".a4-sheet");
+				if (sheetElements.length > 0) {
+					let collectedCss = "";
+					try {
+						for (const sheet of Array.from(document.styleSheets)) {
+							try {
+								for (const rule of Array.from(sheet.cssRules)) {
+									collectedCss += `${rule.cssText}\n`;
+								}
+							} catch {
+								// Ignora stylesheets protegidos por CORS
+							}
+						}
+					} catch {
+						// fallback
+					}
+
+					const styleElements = Array.from(
+						document.querySelectorAll("style, link[rel='stylesheet']"),
+					)
+						.map((el) => el.outerHTML)
+						.join("\n");
+
+					const sheetsHtml = Array.from(sheetElements)
+						.map((el) => {
+							const clone = el.cloneNode(true) as HTMLElement;
+							clone.style.transform = "none";
+							clone.style.boxShadow = "none";
+							clone.style.border = "none";
+							clone.style.margin = "0 auto";
+							return clone.outerHTML;
+						})
+						.join("\n");
+
+					const htmlPayload = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<base href="${window.location.origin}/" />
+${collectedCss ? `<style>${collectedCss}</style>` : styleElements}
+<style>
+@page {
+	size: A4 ${orientation};
+	margin: 0;
+}
+* {
+	-webkit-print-color-adjust: exact !important;
+	print-color-adjust: exact !important;
+}
+body {
+	margin: 0;
+	padding: 0;
+	background: #ffffff;
+}
+.a4-sheet {
+	width: ${baseWidth}px !important;
+	min-height: ${baseHeight}px !important;
+	transform: none !important;
+	box-shadow: none !important;
+	border: none !important;
+	margin: 0 auto !important;
+	page-break-after: always;
+	page-break-inside: avoid;
+}
+.a4-sheet:last-child {
+	page-break-after: auto;
+}
+</style>
+</head>
+<body>
+${sheetsHtml}
+</body>
+</html>`;
+
+					res = await fetch(`/api/sessions/${sessionId}/planning/export`, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							format: "pdf",
+							orientation,
+							html: htmlPayload,
+						}),
+					});
+				} else {
+					res = await fetch(
+						`/api/sessions/${sessionId}/planning/export?format=pdf&orientation=${orientation}`,
+					);
+				}
+			} else {
+				res = await fetch(
+					`/api/sessions/${sessionId}/planning/export?format=docx&orientation=${orientation}`,
+				);
+			}
 
 			if (!res.ok) {
-				window.open(url, "_blank");
+				window.open(
+					`/api/sessions/${sessionId}/planning/export?format=${format}&orientation=${orientation}`,
+					"_blank",
+				);
 				return;
 			}
 
@@ -249,19 +349,22 @@ export function PlanningViewer({
 			const blobUrl = window.URL.createObjectURL(blob);
 			const link = document.createElement("a");
 			link.href = blobUrl;
-			link.download = `planejamento-${planning?.curricularComponents?.[0]?.name || "aula"}-${orientation}.pdf`;
+			const compSlug =
+				planning?.curricularComponents?.[0]?.name?.replace(/\s+/g, "_") ||
+				"aula";
+			link.download = `planejamento-${compSlug}-${orientation}.${format}`;
 			document.body.appendChild(link);
 			link.click();
 			document.body.removeChild(link);
 			window.URL.revokeObjectURL(blobUrl);
 		} catch (err) {
-			console.error("Erro ao exportar PDF:", err);
+			console.error(`Erro ao exportar ${format.toUpperCase()}:`, err);
 			window.open(
-				`/api/sessions/${sessionId}/planning/pdf?orientation=${orientation}`,
+				`/api/sessions/${sessionId}/planning/export?format=${format}&orientation=${orientation}`,
 				"_blank",
 			);
 		} finally {
-			setIsExporting(false);
+			setExportingFormat(null);
 		}
 	};
 
@@ -453,16 +556,35 @@ export function PlanningViewer({
 						</Button>
 					)}
 
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={handleExportPdf}
-						disabled={!hasBlocks || isExporting}
-						className="h-8 text-xs gap-1.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white border-transparent shadow-xs"
-					>
-						<Download className="h-3.5 w-3.5" />
-						<span>{isExporting ? "Gerando..." : "Exportar PDF"}</span>
-					</Button>
+					<div className="flex items-center gap-1.5">
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => handleExport("pdf")}
+							disabled={!hasBlocks || exportingFormat !== null}
+							className="h-8 text-xs gap-1.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white border-transparent shadow-xs cursor-pointer"
+							title="Exportar para PDF A4 de alta fidelidade"
+						>
+							<Download className="h-3.5 w-3.5" />
+							<span>
+								{exportingFormat === "pdf" ? "Gerando..." : "Exportar PDF"}
+							</span>
+						</Button>
+
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => handleExport("docx")}
+							disabled={!hasBlocks || exportingFormat !== null}
+							className="h-8 text-xs gap-1.5 font-semibold bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-xs cursor-pointer"
+							title="Exportar para Microsoft Word / Google Docs (.docx)"
+						>
+							<FileText className="h-3.5 w-3.5" />
+							<span>
+								{exportingFormat === "docx" ? "Gerando..." : "Exportar DOCX"}
+							</span>
+						</Button>
+					</div>
 				</div>
 			</header>
 

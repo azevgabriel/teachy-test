@@ -17,6 +17,19 @@ services:
       timeout: 5s
       retries: 5
 
+  engine:
+    build:
+      context: ../engine
+      dockerfile: Dockerfile
+    container_name: teachy_engine
+    restart: unless-stopped
+    volumes:
+      - ../engine/handler.py:/var/task/handler.py
+      - ../engine/docx_renderer.py:/var/task/docx_renderer.py
+      - ../engine/pdf_renderer.py:/var/task/pdf_renderer.py
+    ports:
+      - '${ENGINE_PORT:-8080}:8080'
+
   service:
     build:
       context: .
@@ -35,11 +48,14 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-teachy_db}?schema=public
       PORT: ${PORT:-3000}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ENGINE_URL: http://engine:8080/2015-03-31/functions/function/invocations
     ports:
       - '${PORT:-3000}:3000'
     depends_on:
       postgres:
         condition: service_healthy
+      engine:
+        condition: service_started
 
 volumes:
   postgres_data:
