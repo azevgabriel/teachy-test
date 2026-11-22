@@ -20,6 +20,24 @@ export function ChatInput({
 }: ChatInputProps) {
 	const [text, setText] = React.useState(controlledValue ?? "");
 	const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+	const prevStreamingRef = React.useRef(isStreaming);
+
+	// Restaura o foco automaticamente quando o streaming for concluído, interrompido ou falhar
+	React.useEffect(() => {
+		let frameId: number | undefined;
+		if (prevStreamingRef.current && !isStreaming) {
+			frameId = requestAnimationFrame(() => {
+				textareaRef.current?.focus();
+			});
+		}
+		prevStreamingRef.current = isStreaming;
+
+		return () => {
+			if (frameId !== undefined) {
+				cancelAnimationFrame(frameId);
+			}
+		};
+	}, [isStreaming]);
 
 	// Sincroniza com valor externo (ex: ao clicar em "Copiar para editar")
 	React.useEffect(() => {
