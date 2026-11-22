@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ChatService } from './chat.service.js';
+import { ChatService, filterCleanChatHistory } from './chat.service.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { AiService } from '../ai/ai.service.js';
 import { NotFoundException } from '@nestjs/common';
+import type { Conversation } from '@prisma/client';
 
 describe('ChatService', () => {
   let chatService: ChatService;
@@ -334,6 +335,91 @@ describe('ChatService', () => {
       expect(prismaMock.conversation.delete).toHaveBeenCalledWith({
         where: { id: 'msg-IA' },
       });
+    });
+
+    it('passes sanitized history and dynamic systemInstruction to aiService.streamChat', async () => {
+      const mockConversations: Partial<Conversation>[] = [
+        { id: '1', text: 'Mensagem válida 1', type: 'USER', interrupted: false },
+        { id: '2', text: 'Resposta válida 1', type: 'IA', interrupted: false },
+        { id: '3', text: 'Mensagem cancelada', type: 'USER', interrupted: true },
+        { id: '4', text: 'Resposta cancelada', type: 'IA', interrupted: true },
+        { id: '5', text: 'Pergunta do usuário abortada', type: 'USER', interrupted: false },
+        { id: '6', text: 'Resposta incompleta com erro', type: 'IA', interrupted: true },
+      ];
+
+      prismaMock.session.findUnique.mockResolvedValue({
+        id: 's1',
+        name: 'Sessão com cancelamentos',
+        conversations: mockConversations,
+      });
+
+      prismaMock.conversation.create
+        .mockResolvedValueOnce({ id: 'u-new', text: 'Nova mensagem', type: 'USER', interrupted: false })
+        .mockResolvedValueOnce({ id: 'ia-new', text: '', type: 'IA', interrupted: false });
+
+      prismaMock.conversation.update.mockResolvedValue({ id: 'ia-new', text: 'Resposta gerada' });
+      prismaMock.session.update.mockResolvedValue({});
+
+      aiServiceMock.streamChat.mockResolvedValue('Resposta gerada');
+
+      await chatService.processMessageStream(
+        's1',
+        'Nova mensagem',
+        new AbortController().signal,
+        () => {},
+      );
+
+      expect(aiServiceMock.streamChat).toHaveBeenCalledTimes(1);
+      const callArgs = aiServiceMock.streamChat.mock.calls[0][0];
+
+      // Deve conter apenas as mensagens 1 e 2 (as mensagens 3, 4, 5, 6 devem ser excluídas)
+      expect(callArgs.history).toEqual([
+        { role: 'user', text: 'Mensagem válida 1' },
+        { role: 'model', text: 'Resposta válida 1' },
+      ]);
+
+      // Deve passar a instrução de sistema construída dinamicamente
+      expect(callArgs.systemInstruction).toBeDefined();
+      expect(callArgs.systemInstruction).toContain('Assistente Pedagógico Teachy — Persona & Co-criação');
+      expect(callArgs.systemInstruction).toContain('Regra Antidump de Tabelas');
+    });
+  });
+
+  describe('filterCleanChatHistory', () => {
+    it('removes interrupted messages and aborted user messages', () => {
+      const conversations = [
+        { id: 'c1', text: 'Planejamento 3º ano', type: 'USER', interrupted: false },
+        { id: 'c2', text: 'Ótimo, vamos começar!', type: 'IA', interrupted: false },
+        { id: 'c3', text: 'Mensagem cancelada pelo usuário', type: 'USER', interrupted: true },
+        { id: 'c4', text: '(interrompido)', type: 'IA', interrupted: true },
+        { id: 'c5', text: 'Pergunta cujo modelo deu erro', type: 'USER', interrupted: false },
+        { id: 'c6', text: '(erro durante geração)', type: 'IA', interrupted: true },
+        { id: 'c7', text: 'Continuando o planejamento', type: 'USER', interrupted: false },
+        { id: 'c8', text: 'Aqui estão as sugestões', type: 'IA', interrupted: false },
+      ] as Conversation[];
+
+      const filtered = filterCleanChatHistory(conversations);
+
+      expect(filtered).toEqual([
+        { role: 'user', text: 'Planejamento 3º ano' },
+        { role: 'model', text: 'Ótimo, vamos começar!' },
+        { role: 'user', text: 'Continuando o planejamento' },
+        { role: 'model', text: 'Aqui estão as sugestões' },
+      ]);
+    });
+
+    it('ignores empty and whitespace-only messages', () => {
+      const conversations = [
+        { id: 'c1', text: '   ', type: 'USER', interrupted: false },
+        { id: 'c2', text: '', type: 'IA', interrupted: false },
+        { id: 'c3', text: 'Mensagem válida', type: 'USER', interrupted: false },
+      ] as Conversation[];
+
+      const filtered = filterCleanChatHistory(conversations);
+
+      expect(filtered).toEqual([
+        { role: 'user', text: 'Mensagem válida' },
+      ]);
     });
   });
 });

@@ -1,12 +1,51 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { AiService } from '../ai/ai.service.js';
+import { AiService, type ChatHistoryMessage } from '../ai/ai.service.js';
+import {
+  SystemInstructionBuilder,
+  type PlanningSnapshot,
+} from '../ai/prompts/system/index.js';
 import type { CreateSessionDto } from './dto/create-session.dto.js';
 import type { Conversation, Session } from '@prisma/client';
 
 export interface StreamResult {
   message: Conversation;
   cancelled: boolean;
+}
+
+/**
+ * Filtra as mensagens da sessão expurgando rigorosamente mensagens marcadas com interrupted === true
+ * e a respectiva mensagem do usuário cujo turno foi abortado/interrompido.
+ */
+export function filterCleanChatHistory(conversations: Conversation[]): ChatHistoryMessage[] {
+  const result: ChatHistoryMessage[] = [];
+  for (let i = 0; i < conversations.length; i++) {
+    const curr = conversations[i];
+
+    // Ignora mensagens marcadas explicitamente como interrompidas
+    if (curr.interrupted) {
+      continue;
+    }
+
+    // Se for mensagem de usuário, verifica se a resposta subsequente da IA foi interrompida
+    if (curr.type === 'USER') {
+      const next = conversations[i + 1];
+      if (next && next.type === 'IA' && next.interrupted) {
+        continue;
+      }
+    }
+
+    const trimmed = curr.text?.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    result.push({
+      role: curr.type === 'USER' ? ('user' as const) : ('model' as const),
+      text: curr.text,
+    });
+  }
+  return result;
 }
 
 @Injectable()
@@ -133,11 +172,56 @@ export class ChatService {
 
     onInit?.(aiMessage.id);
 
-    // 4. Montar histórico para a LLM (excluindo as mensagens recém criadas)
-    const history = session.conversations.map((c) => ({
-      role: c.type === 'USER' ? ('user' as const) : ('model' as const),
-      text: c.text,
-    }));
+    // 4. Montar histórico para a LLM com higiene rigorosa de mensagens interrompidas
+    const history = filterCleanChatHistory(session.conversations);
+
+    // 5. Carregar snapshot do planejamento para compor dinamicamente a instrução do Gemini
+    const planning = this.prisma.planning?.findFirst
+      ? await this.prisma.planning.findFirst({
+          where: { sessionId },
+          include: {
+            school: true,
+            applicationYear: true,
+            curricularComponents: true,
+            learningObjectives: {
+              include: { bnccSkill: true },
+            },
+            evaluations: true,
+            metadataValues: {
+              include: { specification: true },
+            },
+            blocks: {
+              orderBy: [{ order: 'asc' }, { startAt: 'asc' }],
+              include: {
+                learningObjectives: {
+                  include: { bnccSkill: true },
+                },
+                evaluations: true,
+                metadataValues: {
+                  include: { specification: true },
+                },
+              },
+            },
+          },
+        })
+      : null;
+
+    const specifications = this.prisma.specification?.findMany
+      ? await this.prisma.specification.findMany({
+          where: { sessionId },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
+
+    const snapshot: PlanningSnapshot = {
+      planning: planning as any,
+      blocks: (planning?.blocks as any) || [],
+      specifications: specifications as any,
+    };
+
+    const systemInstruction = SystemInstructionBuilder.build({
+      snapshot,
+    });
 
     let accumulatedText = '';
     let cancelled = false;
@@ -147,6 +231,7 @@ export class ChatService {
         history,
         userMessage: userText,
         signal,
+        systemInstruction,
         onChunk: (chunk) => {
           accumulatedText += chunk;
           onChunk(chunk, aiMessage.id);
