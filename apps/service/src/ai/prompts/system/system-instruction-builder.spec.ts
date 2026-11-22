@@ -203,6 +203,54 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
       expect(prompt).toContain('2026-08-04, 2026-08-06');
       expect(prompt).toContain('Total de 3 dia(s) letivo(s) disponível(is): [2026-08-03, 2026-08-05, 2026-08-07]');
     });
+
+    it('formata snapshot com árvore hierárquica indentada visualmente (Nível 1 -> Nível 2 -> Nível 3)', () => {
+      const snapshot: PlanningSnapshot = {
+        planning: {
+          id: 'p-tree',
+          granularity: 'TRIMESTER',
+          startAt: new Date('2026-08-01T00:00:00Z'),
+          endAt: new Date('2026-10-31T23:59:59Z'),
+        },
+        blocks: [
+          {
+            id: 'm1',
+            granularity: 'MONTHLY',
+            order: 1,
+            startAt: new Date('2026-08-01T00:00:00Z'),
+            endAt: new Date('2026-08-31T23:59:59Z'),
+            metodologia: 'Mês 1 - Fundamentos',
+          },
+          {
+            id: 'w1',
+            parentId: 'm1',
+            granularity: 'WEEKLY',
+            order: 1,
+            startAt: new Date('2026-08-03T12:00:00Z'),
+            endAt: new Date('2026-08-07T12:00:00Z'),
+            metodologia: 'Semana 1',
+          },
+          {
+            id: 'd1',
+            parentId: 'w1',
+            granularity: 'DAILY',
+            order: 1,
+            startAt: new Date('2026-08-03T12:00:00Z'),
+            metodologia: 'Aula Inaugural',
+            learningObjectives: [
+              { id: 'lo-1', bnccSkill: { id: 's1', code: 'EF09MA01', description: 'Números Reais' } },
+            ],
+          },
+        ],
+      };
+
+      const prompt = formatSnapshotPrompt(snapshot);
+
+      expect(prompt).toContain('[Nível 1] Bloco [MONTHLY] ID: m1');
+      expect(prompt).toContain('↳ 📅 [Nível 2] Bloco [WEEKLY] ID: w1 (Pai: m1)');
+      expect(prompt).toContain('↳ 📝 [Nível 3] Bloco [DAILY] ID: d1 (Pai: w1)');
+      expect(prompt).toContain('EF09MA01');
+    });
   });
 
   describe('custom teacher context and database catalog', () => {

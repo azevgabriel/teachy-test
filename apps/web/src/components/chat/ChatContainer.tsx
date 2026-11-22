@@ -32,7 +32,7 @@ export function ChatContainer({
 		string | undefined
 	>(propSessionTitle);
 	const [sidebarOpen, setSidebarOpen] = React.useState(false); // Histórico fechado por padrão para dar espaço ao split-view
-	const [planningOpen, setPlanningOpen] = React.useState(true); // Pré-visualização A4 sempre visível à esquerda por padrão
+	const [planningOpen, setPlanningOpen] = React.useState(false); // Pré-visualização fechada por padrão
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [inputValue, setInputValue] = React.useState("");
 	const firstMessageSentRef = React.useRef<string | null>(null);

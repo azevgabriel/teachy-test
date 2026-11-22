@@ -83,6 +83,93 @@ function formatDate(d?: Date | string | null): string {
   return d.toISOString().slice(0, 10);
 }
 
+function formatBlocksHierarchy(blocks: SnapshotPlanningBlock[]): string {
+  if (blocks.length === 0) {
+    return '  *Nenhum bloco de planejamento cadastrado ainda.*\n';
+  }
+
+  const formatBlockDetails = (b: SnapshotPlanningBlock) => {
+    const dates = b.endAt ? `${formatDate(b.startAt)} a ${formatDate(b.endAt)}` : formatDate(b.startAt);
+    const skills = b.learningObjectives && b.learningObjectives.length > 0
+      ? b.learningObjectives.map((o) => o.bnccSkill?.code || o.id).join(', ')
+      : 'Nenhuma BNCC vinculada';
+    const evals = b.evaluations && b.evaluations.length > 0
+      ? b.evaluations.map((e) => `[${e.instrumentType || 'AVAL'}] ${e.name || 'Sem título'}`).join('; ')
+      : 'Nenhuma';
+    const method = b.metodologia ? `Metodologia/Sequência: "${b.metodologia.slice(0, 120)}${b.metodologia.length > 120 ? '...' : ''}"` : 'Metodologia: Não preenchida';
+    const parentInfo = b.parentId ? ` (Pai: ${b.parentId})` : '';
+
+    const blockMetas = b.metadataValues && b.metadataValues.length > 0
+      ? b.metadataValues.map((m) => `${m.specification?.customLabel || m.specification?.colName || 'Meta'}: "${m.textValue || ''}"`).join('; ')
+      : 'Nenhum';
+
+    return { dates, skills, evals, method, parentInfo, blockMetas };
+  };
+
+  const hasHierarchy = blocks.some((b) => Boolean(b.parentId));
+
+  if (!hasHierarchy) {
+    return blocks
+      .map((b, idx) => {
+        const { dates, skills, evals, method, parentInfo, blockMetas } = formatBlockDetails(b);
+        return `  ${idx + 1}. Bloco [${b.granularity || 'BLOCO'}] ID: ${b.id}${parentInfo} | Datas: ${dates} | Ordem: ${b.order ?? 0}
+     - ${method}
+     - BNCC: ${skills}
+     - Colunas Customizadas EAV: ${blockMetas}
+     - Avaliações: ${evals}`;
+      })
+      .join('\n');
+  }
+
+  // Com hierarquia: indexa e monta árvore indentada visualmente (Nível 1 -> Nível 2 -> Nível 3)
+  const blockMap = new Map<string, SnapshotPlanningBlock>();
+  for (const b of blocks) blockMap.set(b.id, b);
+
+  const childrenMap = new Map<string, SnapshotPlanningBlock[]>();
+  const roots: SnapshotPlanningBlock[] = [];
+
+  for (const b of blocks) {
+    if (b.parentId && blockMap.has(b.parentId)) {
+      if (!childrenMap.has(b.parentId)) childrenMap.set(b.parentId, []);
+      childrenMap.get(b.parentId)!.push(b);
+    } else {
+      roots.push(b);
+    }
+  }
+
+  const sortBlocks = (list: SnapshotPlanningBlock[]) =>
+    list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.startAt || '').localeCompare(String(b.startAt || '')));
+
+  sortBlocks(roots);
+  for (const list of childrenMap.values()) sortBlocks(list);
+
+  const lines: string[] = [];
+
+  function renderTree(b: SnapshotPlanningBlock, depth: number) {
+    const indent = '   '.repeat(depth);
+    const { dates, skills, evals, method, parentInfo, blockMetas } = formatBlockDetails(b);
+    const levelLabel = depth === 0 ? 'Nível 1' : depth === 1 ? 'Nível 2' : `Nível ${depth + 1}`;
+    const icon = depth === 0 ? '📍' : depth === 1 ? '↳ 📅' : '   ↳ 📝';
+
+    lines.push(`  ${indent}${icon} [${levelLabel}] Bloco [${b.granularity || 'BLOCO'}] ID: ${b.id}${parentInfo} | Datas: ${dates} | Ordem: ${b.order ?? 0}`);
+    lines.push(`  ${indent}   - ${method}`);
+    lines.push(`  ${indent}   - BNCC: ${skills}`);
+    lines.push(`  ${indent}   - Colunas Customizadas EAV: ${blockMetas}`);
+    lines.push(`  ${indent}   - Avaliações: ${evals}`);
+
+    const children = childrenMap.get(b.id) || [];
+    for (const child of children) {
+      renderTree(child, depth + 1);
+    }
+  }
+
+  for (const root of roots) {
+    renderTree(root, 0);
+  }
+
+  return lines.join('\n');
+}
+
 /**
  * Formata o Snapshot do Planejamento para compor o System Prompt do Gemini.
  * Atua como Fonte Única da Verdade com precedência absoluta sobre o histórico conversacional.
@@ -116,34 +203,7 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
       : 'Nenhum dia letivo encontrado no intervalo.';
   }
 
-  let blocksText = '';
-  if (blocks.length === 0) {
-    blocksText = '  *Nenhum bloco de planejamento cadastrado ainda.*\n';
-  } else {
-    blocksText = blocks
-      .map((b, idx) => {
-        const dates = b.endAt ? `${formatDate(b.startAt)} a ${formatDate(b.endAt)}` : formatDate(b.startAt);
-        const skills = b.learningObjectives && b.learningObjectives.length > 0
-          ? b.learningObjectives.map((o) => o.bnccSkill?.code || o.id).join(', ')
-          : 'Nenhuma BNCC vinculada';
-        const evals = b.evaluations && b.evaluations.length > 0
-          ? b.evaluations.map((e) => `[${e.instrumentType || 'AVAL'}] ${e.name || 'Sem título'}`).join('; ')
-          : 'Nenhuma';
-        const method = b.metodologia ? `Metodologia/Sequência: "${b.metodologia.slice(0, 120)}${b.metodologia.length > 120 ? '...' : ''}"` : 'Metodologia: Não preenchida';
-        const parentInfo = b.parentId ? ` (Pai: ${b.parentId})` : '';
-
-        const blockMetas = b.metadataValues && b.metadataValues.length > 0
-          ? b.metadataValues.map((m) => `${m.specification?.customLabel || m.specification?.colName || 'Meta'}: "${m.textValue || ''}"`).join('; ')
-          : 'Nenhum';
-
-        return `  ${idx + 1}. Bloco [${b.granularity || 'BLOCO'}] ID: ${b.id}${parentInfo} | Datas: ${dates} | Ordem: ${b.order ?? 0}
-     - ${method}
-     - BNCC: ${skills}
-     - Colunas Customizadas EAV: ${blockMetas}
-     - Avaliações: ${evals}`;
-      })
-      .join('\n');
-  }
+  const blocksText = formatBlocksHierarchy(blocks);
 
   let specsText = '';
   if (specifications.length === 0) {

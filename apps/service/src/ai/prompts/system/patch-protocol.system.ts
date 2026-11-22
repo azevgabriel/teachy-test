@@ -80,13 +80,25 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
    - Para colunas nos blocos (\`tableRef: "PLANNING_BLOCK"\`), passe com \`date\` ou \`order\`:
      \`{ "colName": "conteudo", "values": [{ "date": "2026-03-02", "textValue": "Conteúdo do dia 02..." }] }\`
 
-6. **\`DELETE_BLOCK_WITH_GAP\` (Exclusão de Bloco com Detecção de Gap):**
-   - Use para excluir um bloco de tempo (ex: mês de janeiro). Lembre-se de alertar o professor na parte textual sobre a descontinuidade temporal.
-   - Formato: \`{ "date": "2026-01-01", "granularity": "MONTHLY" }\`
+6. **\`DELETE_BLOCK_WITH_GAP\` (Exclusão de Bloco Pontual ou Remoção de Camada Inteira de Granularidade):**
+   - **Exclusão pontual de bloco de tempo:**
+     * Use para excluir um bloco de tempo específico (ex: mês de janeiro). Lembre-se de alertar o professor na parte textual sobre a descontinuidade temporal.
+     * Formato: \`{ "operation": "DELETE_BLOCK_WITH_GAP", "data": { "date": "2026-01-01", "granularity": "MONTHLY" } }\`
+   - **Remoção de camada inteira de granularidade:**
+     * Use quando o professor pedir para remover um nível hierárquico inteiro (ex.: *"deixa por semana mesmo, remove o diário"*, *"Deixe trimestral -> mês e semana apenas"*, *"você não removeu os diários"*).
+     * Formato: \`{ "operation": "DELETE_BLOCK_WITH_GAP", "data": { "granularity": "DAILY" } }\`
+     * O backend remove todos os blocos dessa granularidade e preserva as camadas superiores.
 
-7. **\`REORGANIZE_TREE\` (Reorganização Hierárquica):**
-   - Use ao reorganizar níveis hierárquicos (ex: agrupar dias em semanas).
-   - Formato: \`{ "parentGranularity": "WEEKLY", "childGranularity": "DAILY" }\`
+7. **\`REORGANIZE_TREE\` (Reorganização Hierárquica, Agrupamento e Subdivisão Temporal):**
+   - Use ao reorganizar níveis hierárquicos, seja agrupando blocos de menor granularidade (Bottom-Up) ou subdividindo blocos existentes em unidades menores (Top-Down).
+   - Exemplos práticos:
+     * Agrupamento de dias em semanas:
+       Comando: *"Agrupa por semana, mas mantém o detalhe de cada dia"*
+       Formato: \`{ "operation": "REORGANIZE_TREE", "data": { "parentGranularity": "WEEKLY", "childGranularity": "DAILY" } }\`
+     * Subdivisão de meses em semanas:
+       Comando: *"Eu queria subdividir os meses em semanas. ficar com um estrutura de trimestre -> mensal -> semanal"*
+       Formato: \`{ "operation": "REORGANIZE_TREE", "data": { "parentGranularity": "MONTHLY", "childGranularity": "WEEKLY" } }\`
+   - O backend calcula automaticamente as semanas de calendário (segunda a sexta), vinculando o \`parentId\` de forma recursiva e preservando 100% dos dados originais (metodologias, BNCCs e metadados).
 
 8. **\`RESET_PLANNING\` (Recomeço do Zero & Higiene de Contexto):**
    - Use quando o professor solicitar descartar o planejamento, começar do zero, zerar ou recomeçar (ex.: *"vamos recomeçar"*, *"começar do zero"*, *"quero zerar o planejamento"*).
