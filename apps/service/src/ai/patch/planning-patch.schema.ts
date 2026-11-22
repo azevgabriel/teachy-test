@@ -13,6 +13,12 @@ export const planningGranularityEnum = z.enum([
 
 export const specificationTableRefEnum = z.enum(['PLANNING', 'PLANNING_BLOCK']);
 
+export const patchMetadataValueSchema = z.object({
+  colName: z.string(),
+  textValue: z.string().optional(),
+  jsonbValue: z.unknown().optional(),
+});
+
 export const patchEvaluationItemSchema = z.object({
   name: z.string().optional(),
   instrumentType: z.string().optional(),
@@ -21,6 +27,15 @@ export const patchEvaluationItemSchema = z.object({
   description: z.string().optional(),
   startAt: z.string().optional(),
   endAt: z.string().optional(),
+});
+
+export const addSpecificationPatchDataSchema = z.object({
+  colName: z.string(),
+  customLabel: z.string().optional(),
+  tableRef: specificationTableRefEnum,
+  description: z.string().optional(),
+  isRequired: z.boolean().default(false),
+  initialValue: z.string().optional(),
 });
 
 export const patchBlockItemSchema = z.object({
@@ -32,6 +47,7 @@ export const patchBlockItemSchema = z.object({
   order: z.number().int().optional(),
   metodologia: z.string().optional(),
   bnccCodes: z.array(z.string()).optional(),
+  metadataValues: z.array(patchMetadataValueSchema).optional(),
   evaluations: z.array(patchEvaluationItemSchema).optional(),
 });
 
@@ -48,6 +64,8 @@ export const upsertPlanningPatchSchema = z.object({
     startAt: z.string().optional().nullable(),
     endAt: z.string().optional().nullable(),
     bnccCodes: z.array(z.string()).optional(),
+    specifications: z.array(addSpecificationPatchDataSchema).optional(),
+    metadataValues: z.array(patchMetadataValueSchema).optional(),
     blocks: z.array(patchBlockItemSchema).optional(),
     evaluations: z.array(patchEvaluationItemSchema).optional(),
   }),
@@ -78,13 +96,7 @@ export const batchUpdateColumnPatchSchema = z.object({
 // 3. Adição de Especificação (Coluna Dinâmica)
 export const addSpecificationPatchSchema = z.object({
   operation: z.literal('ADD_SPECIFICATION'),
-  data: z.object({
-    colName: z.string(),
-    customLabel: z.string().optional(),
-    tableRef: specificationTableRefEnum,
-    description: z.string().optional(),
-    isRequired: z.boolean().default(false),
-  }),
+  data: addSpecificationPatchDataSchema,
 });
 
 // 4. Preenchimento de Metadados EAV
@@ -164,6 +176,8 @@ export const planningPatchPayloadSchema = z.union([
 
 export type PlanningGranularityType = z.infer<typeof planningGranularityEnum>;
 export type SpecificationTableRefType = z.infer<typeof specificationTableRefEnum>;
+export type PatchMetadataValue = z.infer<typeof patchMetadataValueSchema>;
+export type AddSpecificationPatchData = z.infer<typeof addSpecificationPatchDataSchema>;
 export type PatchEvaluationItem = z.infer<typeof patchEvaluationItemSchema>;
 export type PatchBlockItem = z.infer<typeof patchBlockItemSchema>;
 export type SinglePatchOperation = z.infer<typeof singlePatchOperationSchema>;

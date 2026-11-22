@@ -15,10 +15,41 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
 
 ## 2. Catálogo de Operações Suportadas:
 
-1. **\`UPSERT_PLANNING\` (Criação Inicial ou Dados Consolidados):**
-   - Use quando o professor fornecer dados consolidados (disciplina, ano, período, habilidades da BNCC ou blocos iniciais).
-   - Formato do data:
-     \`{ "granularity": "MONTHLY"|"WEEKLY"|..., "curricularComponentNames": ["Matemática"], "applicationYearName": "3º Ano EF", "bnccCodes": ["EF03MA01"], "startAt": "2026-03-01T00:00:00Z", "endAt": "2026-03-31T23:59:59Z", "blocks": [...] }\`
+1. **\`UPSERT_PLANNING\` (Criação Inicial, Consolidação & Persistência Completa):**
+   - Use quando o professor fornecer dados consolidados (disciplina/campo de experiência, ano/faixa etária, período, habilidades da BNCC ou blocos com colunas customizadas).
+   - **Regra de Granularidade Macro:** Se o planejamento for para 1 semana (com 5 dias de aulas/vivências), \`granularity\` DEVE ser \`"WEEKLY"\`, JAMAIS \`"DAILY"\`!
+   - Formato suportado do data:
+\`\`\`json
+{
+  "granularity": "WEEKLY",
+  "curricularComponentNames": ["Corpo, gestos e movimentos"],
+  "applicationYearName": "Ensino Infantil (zero a 1 ano e 6 meses)",
+  "startAt": "2026-03-02T00:00:00Z",
+  "endAt": "2026-03-06T23:59:59Z",
+  "bnccCodes": ["EI01CG01"],
+  "specifications": [
+    { "colName": "metodologia", "tableRef": "PLANNING_BLOCK", "customLabel": "Sequência Didática" },
+    { "colName": "conteudo", "tableRef": "PLANNING_BLOCK", "customLabel": "Conteúdo" },
+    { "colName": "aplicacao_crista", "tableRef": "PLANNING", "customLabel": "Aplicação Cristã" },
+    { "colName": "rotina_semanal", "tableRef": "PLANNING", "customLabel": "Rotina Semanal" }
+  ],
+  "metadataValues": [
+    { "colName": "aplicacao_crista", "textValue": "Cuidado e acolhimento afetuoso dos bebês." },
+    { "colName": "rotina_semanal", "textValue": "Momentos diários de acolhida, sono, alimentação e estimulação." }
+  ],
+  "blocks": [
+    {
+      "startAt": "2026-03-02",
+      "order": 1,
+      "metodologia": "Sequência Didática: 1. Acolhida... 2. Exploração sensorial... 3. Relaxamento.",
+      "bnccCodes": ["EI01CG01"],
+      "metadataValues": [
+        { "colName": "conteudo", "textValue": "Percepção sensorial e comunicação oral/gestual." }
+      ]
+    }
+  ]
+}
+\`\`\`
 
 2. **\`UPDATE_BLOCK_BY_DATE\` (Troca Pontual de Bloco):**
    - Use para atualizar a metodologia, habilidades BNCC ou avaliações de uma data específica.
@@ -30,11 +61,15 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
 
 4. **\`ADD_SPECIFICATION\` (Criação de Coluna Customizada EAV):**
    - Use ao registrar uma nova coluna após a confirmação/desambiguação com o professor.
-   - Formato: \`{ "colName": "recursos_didaticos", "customLabel": "Recursos Didáticos", "tableRef": "PLANNING_BLOCK"|"PLANNING", "isRequired": true }\`
+   - Pode receber \`initialValue\` para já gravar o valor e evitar coluna órfã!
+   - Formato: \`{ "colName": "aplicacao_crista", "customLabel": "Aplicação Cristã", "tableRef": "PLANNING", "initialValue": "Texto da aplicação cristã...", "isRequired": true }\`
 
 5. **\`FILL_METADATA\` (Preenchimento de Valores EAV):**
    - Use quando o professor fornecer os valores para as colunas customizadas.
-   - Formato: \`{ "colName": "recursos_didaticos", "values": [{ "date": "2026-03-05", "textValue": "Tablets e cartolina" }] }\`
+   - Para colunas no escopo do cabeçalho (\`tableRef: "PLANNING"\`), passe apenas \`textValue\`:
+     \`{ "colName": "rotina_semanal", "values": [{ "textValue": "Rotina geral da semana..." }] }\`
+   - Para colunas nos blocos (\`tableRef: "PLANNING_BLOCK"\`), passe com \`date\` ou \`order\`:
+     \`{ "colName": "conteudo", "values": [{ "date": "2026-03-02", "textValue": "Conteúdo do dia 02..." }] }\`
 
 6. **\`DELETE_BLOCK_WITH_GAP\` (Exclusão de Bloco com Detecção de Gap):**
    - Use para excluir um bloco de tempo (ex: mês de janeiro). Lembre-se de alertar o professor na parte textual sobre a descontinuidade temporal.

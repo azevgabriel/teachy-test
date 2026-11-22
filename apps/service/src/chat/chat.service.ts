@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiService, type ChatHistoryMessage } from '../ai/ai.service.js';
 import {
@@ -9,6 +9,7 @@ import {
   DualOutputStreamTransformer,
   type PlanningPatchPayload,
 } from '../ai/patch/index.js';
+import { PlanningService } from '../planning/planning.service.js';
 import type { CreateSessionDto } from './dto/create-session.dto.js';
 import type { Conversation, Session } from '@prisma/client';
 
@@ -19,10 +20,22 @@ export interface StreamResult {
 }
 
 /**
+ * Quantidade máxima de turnos conversacionais recentes mantidos no histórico enviado à LLM.
+ * 2 turnos = 2 mensagens do usuário e 2 respostas do modelo (4 mensagens no total).
+ * Evita contaminação de contexto com dados obsoletos já superados pelo snapshot relacional.
+ */
+export const MAX_CHAT_HISTORY_TURNS = 2;
+export const MAX_CHAT_HISTORY_MESSAGES = MAX_CHAT_HISTORY_TURNS * 2;
+
+/**
  * Filtra as mensagens da sessão expurgando rigorosamente mensagens marcadas com interrupted === true
  * e a respectiva mensagem do usuário cujo turno foi abortado/interrompido.
+ * Aplica janela deslizante para reter apenas as interações recentes e evitar poluição contextual.
  */
-export function filterCleanChatHistory(conversations: Conversation[]): ChatHistoryMessage[] {
+export function filterCleanChatHistory(
+  conversations: Conversation[],
+  maxMessages: number = MAX_CHAT_HISTORY_MESSAGES,
+): ChatHistoryMessage[] {
   const result: ChatHistoryMessage[] = [];
   for (let i = 0; i < conversations.length; i++) {
     const curr = conversations[i];
@@ -50,15 +63,172 @@ export function filterCleanChatHistory(conversations: Conversation[]): ChatHisto
       text: curr.text,
     });
   }
+
+  if (maxMessages > 0 && result.length > maxMessages) {
+    return result.slice(-maxMessages);
+  }
+
   return result;
 }
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
+    private readonly planningService: PlanningService,
   ) {}
+
+  private async fetchRelevantBnccSkills(
+    planning: any,
+    userText: string,
+    history: ChatHistoryMessage[],
+  ): Promise<Array<{ code: string; description: string }>> {
+    try {
+      const yearId = planning?.applicationYearId;
+      const compIds = planning?.curricularComponents?.map((c: any) => c.id) || [];
+
+      if (yearId || compIds.length > 0) {
+        return await this.prisma.bnccSkill.findMany({
+          where: {
+            ...(yearId ? { applicationYears: { some: { id: yearId } } } : {}),
+            ...(compIds.length > 0
+              ? { curricularComponents: { some: { id: { in: compIds } } } }
+              : {}),
+          },
+          select: { code: true, description: true },
+          take: 35,
+          orderBy: { code: 'asc' },
+        });
+      }
+
+      // Se ainda não há planejamento criado, busca palavras-chave na conversa recente
+      const textContext = `${userText} ${history.slice(-2).map((h) => h.text).join(' ')}`.toLowerCase();
+
+      const allYears = await this.prisma.applicationYear.findMany({ select: { id: true, name: true } });
+      const matchedYear = allYears.find((y) => {
+        const lowerY = y.name.toLowerCase();
+        if (
+          textContext.includes('bebê') ||
+          textContext.includes('berçário') ||
+          textContext.includes('0 a 1') ||
+          textContext.includes('zero a 1') ||
+          textContext.includes('sensorial') ||
+          textContext.includes('balbucio')
+        ) {
+          return lowerY.includes('zero a 1 ano e 6 meses') || lowerY.includes('bebês');
+        }
+        if (
+          textContext.includes('bem pequena') ||
+          (textContext.includes('infantil') && (textContext.includes('2') || textContext.includes('1 ano')))
+        ) {
+          return lowerY.includes('1 ano e 7 meses a 3 anos e 11 meses');
+        }
+        if (
+          textContext.includes('pequena') ||
+          (textContext.includes('infantil') && (textContext.includes('4') || textContext.includes('5')))
+        ) {
+          return lowerY.includes('4 anos a 5 anos e 11 meses');
+        }
+        if (textContext.includes('infantil')) {
+          return lowerY.includes('infantil');
+        }
+        if (textContext.includes('1º') || textContext.includes('1o') || textContext.includes('primeiro')) {
+          return lowerY.includes('1º ano do ensino fundamental');
+        }
+        if (textContext.includes('2º') || textContext.includes('2o') || textContext.includes('segundo')) {
+          return lowerY.includes('2º ano do ensino fundamental');
+        }
+        if (textContext.includes('3º') || textContext.includes('3o') || textContext.includes('terceiro')) {
+          return lowerY.includes('3º ano do ensino fundamental');
+        }
+        if (textContext.includes('4º') || textContext.includes('4o') || textContext.includes('quarto')) {
+          return lowerY.includes('4º ano do ensino fundamental');
+        }
+        if (textContext.includes('5º') || textContext.includes('5o') || textContext.includes('quinto')) {
+          return lowerY.includes('5º ano do ensino fundamental');
+        }
+        return textContext.includes(lowerY);
+      });
+
+      const allComps = await this.prisma.curricularComponent.findMany({ select: { id: true, name: true } });
+      const matchedComp = allComps.find((c) => {
+        const lowerC = c.name.toLowerCase();
+        if (
+          textContext.includes('corpo') ||
+          textContext.includes('gesto') ||
+          textContext.includes('movimento') ||
+          textContext.includes('motora') ||
+          textContext.includes('sensorial')
+        ) {
+          return lowerC.includes('corpo, gestos');
+        }
+        if (
+          textContext.includes('escuta') ||
+          textContext.includes('fala') ||
+          textContext.includes('balbucio') ||
+          textContext.includes('linguag') ||
+          textContext.includes('comunicação oral')
+        ) {
+          return lowerC.includes('escuta, fala');
+        }
+        if (
+          textContext.includes('eu') ||
+          textContext.includes('outro') ||
+          textContext.includes('nós') ||
+          textContext.includes('afetiv') ||
+          textContext.includes('vínculo')
+        ) {
+          return lowerC.includes('eu, o outro');
+        }
+        if (
+          textContext.includes('traço') ||
+          textContext.includes('som') ||
+          textContext.includes('cor') ||
+          textContext.includes('forma') ||
+          textContext.includes('música')
+        ) {
+          return lowerC.includes('traços, sons');
+        }
+        if (
+          textContext.includes('espaço') ||
+          textContext.includes('tempo') ||
+          textContext.includes('quantidade') ||
+          textContext.includes('natureza')
+        ) {
+          return lowerC.includes('espaços, tempos');
+        }
+        if (textContext.includes('portugu') || textContext.includes('leitura')) {
+          return lowerC.includes('portuguesa');
+        }
+        if (textContext.includes('matem') || textContext.includes('números')) {
+          return lowerC.includes('matemática');
+        }
+        if (textContext.includes('ciênc')) {
+          return lowerC.includes('ciências');
+        }
+        return textContext.includes(lowerC);
+      });
+
+      if (matchedYear || matchedComp) {
+        return await this.prisma.bnccSkill.findMany({
+          where: {
+            ...(matchedYear ? { applicationYears: { some: { id: matchedYear.id } } } : {}),
+            ...(matchedComp ? { curricularComponents: { some: { id: matchedComp.id } } } : {}),
+          },
+          select: { code: true, description: true },
+          take: 35,
+          orderBy: { code: 'asc' },
+        });
+      }
+
+      return [];
+    } catch {
+      return [];
+    }
+  }
 
   async createSession(dto?: CreateSessionDto): Promise<Session> {
     const name = dto?.name?.trim() || 'Nova Conversa';
@@ -224,8 +394,27 @@ export class ChatService {
       specifications: specifications as any,
     };
 
+    const [bnccSkills, availableYears, availableCurricularComponents] = await Promise.all([
+      this.fetchRelevantBnccSkills(planning, userText, history),
+      this.prisma.applicationYear?.findMany
+        ? this.prisma.applicationYear.findMany({
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          })
+        : Promise.resolve([]),
+      this.prisma.curricularComponent?.findMany
+        ? this.prisma.curricularComponent.findMany({
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          })
+        : Promise.resolve([]),
+    ]);
+
     const systemInstruction = SystemInstructionBuilder.build({
       snapshot,
+      bnccSkills,
+      availableYears,
+      availableCurricularComponents,
     });
 
     let accumulatedText = '';
@@ -319,6 +508,17 @@ export class ChatService {
       where: { id: sessionId },
       data: { updatedAt: new Date() },
     });
+
+    // 7. Persistência relacional atômica no banco de dados via PlanningModule
+    if (!cancelled && parseResult.patch) {
+      try {
+        await this.planningService.applyPatch(sessionId, parseResult.patch);
+      } catch (patchErr) {
+        this.logger.error(
+          `Falha ao aplicar patch relacional para a sessão ${sessionId}: ${String(patchErr)}`,
+        );
+      }
+    }
 
     return {
       message: finalAiMessage,

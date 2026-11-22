@@ -163,4 +163,37 @@ describe('PlanningPatchSchema', () => {
     const result = planningPatchPayloadSchema.safeParse(payload);
     expect(result.success).toBe(false);
   });
+
+  it('deve validar UPSERT_PLANNING com especificações, metadados macro e metadados nos blocos', () => {
+    const payload = {
+      operation: 'UPSERT_PLANNING',
+      data: {
+        granularity: 'WEEKLY',
+        curricularComponentNames: ['Corpo, gestos e movimentos'],
+        applicationYearName: 'Ensino Infantil (zero a 1 ano e 6 meses)',
+        specifications: [
+          { colName: 'metodologia', tableRef: 'PLANNING_BLOCK', customLabel: 'Sequência Didática' },
+          { colName: 'conteudo', tableRef: 'PLANNING_BLOCK', customLabel: 'Conteúdo' },
+          { colName: 'aplicacao_crista', tableRef: 'PLANNING', customLabel: 'Aplicação Cristã' },
+        ],
+        metadataValues: [
+          { colName: 'aplicacao_crista', textValue: 'Acolhimento com amor e cuidado aos bebês.' },
+        ],
+        blocks: [
+          {
+            startAt: '2026-03-02',
+            order: 1,
+            metodologia: '1. Roda de cantigas. 2. Exploração sensorial de tecidos.',
+            bnccCodes: ['EI01CG01'],
+            metadataValues: [
+              { colName: 'conteudo', textValue: 'Percepção sensorial e comunicação oral/gestual.' },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
 });

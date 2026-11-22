@@ -24,15 +24,30 @@ describe('ChatService', () => {
         update: vi.fn(),
         delete: vi.fn(),
       },
+      applicationYear: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      curricularComponent: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      bnccSkill: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     };
 
     aiServiceMock = {
       streamChat: vi.fn(),
     };
 
+    const planningServiceMock = {
+      applyPatch: vi.fn().mockResolvedValue(undefined),
+      getPlanningBySessionId: vi.fn(),
+    };
+
     chatService = new ChatService(
       prismaMock as unknown as PrismaService,
       aiServiceMock as unknown as AiService,
+      planningServiceMock as any,
     );
   });
 
@@ -534,6 +549,27 @@ describe('ChatService', () => {
 
       expect(filtered).toEqual([
         { role: 'user', text: 'Mensagem válida' },
+      ]);
+    });
+
+    it('limits history to the last 2 turns (4 messages) to avoid context pollution', () => {
+      const conversations = [
+        { id: 'c1', text: 'Turno 1 - User', type: 'USER', interrupted: false },
+        { id: 'c2', text: 'Turno 1 - IA', type: 'IA', interrupted: false },
+        { id: 'c3', text: 'Turno 2 - User', type: 'USER', interrupted: false },
+        { id: 'c4', text: 'Turno 2 - IA', type: 'IA', interrupted: false },
+        { id: 'c5', text: 'Turno 3 - User', type: 'USER', interrupted: false },
+        { id: 'c6', text: 'Turno 3 - IA', type: 'IA', interrupted: false },
+      ] as Conversation[];
+
+      const filtered = filterCleanChatHistory(conversations);
+
+      expect(filtered).toHaveLength(4);
+      expect(filtered).toEqual([
+        { role: 'user', text: 'Turno 2 - User' },
+        { role: 'model', text: 'Turno 2 - IA' },
+        { role: 'user', text: 'Turno 3 - User' },
+        { role: 'model', text: 'Turno 3 - IA' },
       ]);
     });
   });

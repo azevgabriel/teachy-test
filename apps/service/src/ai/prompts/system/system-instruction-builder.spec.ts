@@ -189,7 +189,7 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     });
   });
 
-  describe('custom teacher context', () => {
+  describe('custom teacher context and database catalog', () => {
     it('appends teacher profile and custom instructions when provided', () => {
       const instruction = SystemInstructionBuilder.build({
         teacherName: 'Profa. Mariana',
@@ -198,6 +198,25 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
 
       expect(instruction).toContain('Professor atendido: Profa. Mariana');
       expect(instruction).toContain('Focar em metodologias ativas para turma inclusiva.');
+    });
+
+    it('injects official application years and curricular components catalog', () => {
+      const instruction = SystemInstructionBuilder.build({
+        availableYears: [
+          { id: 'y1', name: 'Ensino Infantil (zero a 1 ano e 6 meses)' },
+          { id: 'y2', name: '3º ano do Ensino Fundamental I' },
+        ],
+        availableCurricularComponents: [
+          { id: 'c1', name: 'Corpo, gestos e movimentos' },
+          { id: 'c2', name: 'Matemática' },
+        ],
+      });
+
+      expect(instruction).toContain('Catálogo Oficial de Anos de Aplicação & Componentes Curriculares (PostgreSQL)');
+      expect(instruction).toContain('"Ensino Infantil (zero a 1 ano e 6 meses)"');
+      expect(instruction).toContain('"3º ano do Ensino Fundamental I"');
+      expect(instruction).toContain('"Corpo, gestos e movimentos"');
+      expect(instruction).toContain('"Matemática"');
     });
   });
 });
