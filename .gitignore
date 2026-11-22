@@ -6,3 +6,12 @@ dist/
 coverage/
 tmp/
 .playwright-cli
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
