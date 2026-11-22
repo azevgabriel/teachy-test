@@ -35,6 +35,11 @@ Each guideline owns a single domain. Do not duplicate rules across files:
 - [NESTJS.md](NESTJS.md): Core NestJS conventions, module structure and testing.
 - [STREAMS.md](STREAMS.md): Outbound streaming responses (LLM token chunks), `StreamableFile`, stream cancellation, and state persistence hooks.
 - [UPLOAD.md](UPLOAD.md): Multipart file uploads, streaming ingestion, and validation for images (screenshots/photos), PDF, and DOCX.
+- [planning/](planning/README.md): **Pedagogical Lesson Planning Engine:**
+  - [01_DATA_MODEL.md](planning/01_DATA_MODEL.md): Relational entities (`Planning`, `PlanningBlock`), EAV pattern (`Specification`, `PlanningMetadataValue`), and relational integrity constraints.
+  - [02_ORCHESTRATION_RULES.md](planning/02_ORCHESTRATION_RULES.md): BNCC pedagogical depth rules, temporal guardrails, gap management, and teacher-to-teacher conversational principles.
+  - [03_EVALUATIONS.md](planning/03_EVALUATIONS.md): Brazilian Basic Education evaluation system (0-10, 0-100, weighted, qualitative scales, and instrument catalog).
+  - [04_INTENT_CATALOG.md](planning/04_INTENT_CATALOG.md): Conversational intent matrix, teacher dialogue flows, and corresponding Prisma database operations.
 
 ---
 
