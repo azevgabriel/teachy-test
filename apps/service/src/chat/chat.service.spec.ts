@@ -572,5 +572,63 @@ describe('ChatService', () => {
         { role: 'model', text: 'Turno 3 - IA' },
       ]);
     });
+
+    it('expurga todo o histórico anterior ao comando de recomeço (RESET_PLANNING) para evitar sujeira de contexto', () => {
+      const conversations = [
+        {
+          id: 'c1',
+          text: 'Vamos fazer um plano para Educação Infantil bebês',
+          type: 'USER',
+          interrupted: false,
+        },
+        {
+          id: 'c2',
+          text: 'Perfeito! Vamos focar no campo de experiências Corpo, Gestos...',
+          type: 'IA',
+          interrupted: false,
+        },
+        {
+          id: 'c3',
+          text: 'Quero recomeçar do zero',
+          type: 'USER',
+          interrupted: false,
+        },
+        {
+          id: 'c4',
+          text: 'Com certeza, vamos recomeçar do zero! O que deseja planejar agora?',
+          type: 'IA',
+          commands: { operation: 'RESET_PLANNING', data: {} },
+          interrupted: false,
+        },
+        {
+          id: 'c5',
+          text: 'Não vamos manter o ensino infantil, vamos mudar para 3º Ano do EM',
+          type: 'USER',
+          interrupted: false,
+        },
+        {
+          id: 'c6',
+          text: 'Excelente! O 3º ano do Ensino Médio é estratégico...',
+          type: 'IA',
+          interrupted: false,
+        },
+      ] as unknown as Conversation[];
+
+      const filtered = filterCleanChatHistory(conversations);
+
+      // Deve conter apenas as interações a partir do comando de recomeço (c3 em diante)
+      // e respeitar o limite de mensagens (máx 4)
+      expect(filtered).toEqual([
+        { role: 'user', text: 'Quero recomeçar do zero' },
+        { role: 'model', text: 'Com certeza, vamos recomeçar do zero! O que deseja planejar agora?' },
+        { role: 'user', text: 'Não vamos manter o ensino infantil, vamos mudar para 3º Ano do EM' },
+        { role: 'model', text: 'Excelente! O 3º ano do Ensino Médio é estratégico...' },
+      ]);
+
+      // Nenhuma menção a "Educação Infantil bebês" deve constar
+      const texts = filtered.map((m) => m.text).join(' ');
+      expect(texts).not.toContain('Educação Infantil bebês');
+      expect(texts).not.toContain('Corpo, Gestos');
+    });
   });
 });

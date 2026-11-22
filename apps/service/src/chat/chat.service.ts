@@ -10,6 +10,7 @@ import {
   type PlanningPatchPayload,
 } from '../ai/patch/index.js';
 import { PlanningService } from '../planning/planning.service.js';
+import { matchApplicationYear, matchCurricularComponent } from '../planning/utils/index.js';
 import type { CreateSessionDto } from './dto/create-session.dto.js';
 import type { Conversation, Session } from '@prisma/client';
 
@@ -28,17 +29,65 @@ export const MAX_CHAT_HISTORY_TURNS = 2;
 export const MAX_CHAT_HISTORY_MESSAGES = MAX_CHAT_HISTORY_TURNS * 2;
 
 /**
- * Filtra as mensagens da sessão expurgando rigorosamente mensagens marcadas com interrupted === true
- * e a respectiva mensagem do usuário cujo turno foi abortado/interrompido.
+ * Verifica se a mensagem representa um comando ou execução de recomeço/reset.
+ */
+export function isResetConversation(conversation: Conversation): boolean {
+  if (conversation.commands) {
+    const cmds = conversation.commands as any;
+    if (cmds.operation === 'RESET_PLANNING') {
+      return true;
+    }
+    if (
+      Array.isArray(cmds.operations) &&
+      cmds.operations.some((op: any) => op.operation === 'RESET_PLANNING')
+    ) {
+      return true;
+    }
+  }
+
+  if (conversation.type === 'USER' && conversation.text) {
+    const norm = conversation.text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return /\b(recomecar|comecar do zero|zerar planejamento|resetar planejamento|zerar o planejamento|resetar o planejamento|vamos recomecar)\b/.test(
+      norm,
+    );
+  }
+
+  return false;
+}
+
+/**
+ * Filtra as mensagens da sessão expurgando rigorosamente mensagens marcadas com interrupted === true,
+ * a respectiva mensagem do usuário cujo turno foi abortado/interrompido, e expurgando TODO o histórico
+ * anterior ao último comando de recomeço/reset (RESET_PLANNING), garantindo contexto 100% limpo ("zerado").
  * Aplica janela deslizante para reter apenas as interações recentes e evitar poluição contextual.
  */
 export function filterCleanChatHistory(
   conversations: Conversation[],
   maxMessages: number = MAX_CHAT_HISTORY_MESSAGES,
 ): ChatHistoryMessage[] {
+  // 1. Identificar o ponto de corte do último comando de recomeço
+  let startIdx = 0;
+  for (let i = conversations.length - 1; i >= 0; i--) {
+    if (isResetConversation(conversations[i])) {
+      // Se for mensagem da IA com o patch RESET_PLANNING, o comando de recomeço do usuário foi em (i - 1)
+      if (conversations[i].type === 'IA') {
+        const prev = conversations[i - 1];
+        startIdx = prev && prev.type === 'USER' ? i - 1 : i;
+      } else {
+        startIdx = i;
+      }
+      break;
+    }
+  }
+
+  const scopedConversations = conversations.slice(startIdx);
   const result: ChatHistoryMessage[] = [];
-  for (let i = 0; i < conversations.length; i++) {
-    const curr = conversations[i];
+
+  for (let i = 0; i < scopedConversations.length; i++) {
+    const curr = scopedConversations[i];
 
     // Ignora mensagens marcadas explicitamente como interrompidas
     if (curr.interrupted) {
@@ -47,7 +96,7 @@ export function filterCleanChatHistory(
 
     // Se for mensagem de usuário, verifica se a resposta subsequente da IA foi interrompida
     if (curr.type === 'USER') {
-      const next = conversations[i + 1];
+      const next = scopedConversations[i + 1];
       if (next && next.type === 'IA' && next.interrupted) {
         continue;
       }
@@ -105,112 +154,17 @@ export class ChatService {
       }
 
       // Se ainda não há planejamento criado, busca palavras-chave na conversa recente
-      const textContext = `${userText} ${history.slice(-2).map((h) => h.text).join(' ')}`.toLowerCase();
+      const textContext = `${userText} ${history.slice(-2).map((h) => h.text).join(' ')}`;
 
-      const allYears = await this.prisma.applicationYear.findMany({ select: { id: true, name: true } });
-      const matchedYear = allYears.find((y) => {
-        const lowerY = y.name.toLowerCase();
-        if (
-          textContext.includes('bebê') ||
-          textContext.includes('berçário') ||
-          textContext.includes('0 a 1') ||
-          textContext.includes('zero a 1') ||
-          textContext.includes('sensorial') ||
-          textContext.includes('balbucio')
-        ) {
-          return lowerY.includes('zero a 1 ano e 6 meses') || lowerY.includes('bebês');
-        }
-        if (
-          textContext.includes('bem pequena') ||
-          (textContext.includes('infantil') && (textContext.includes('2') || textContext.includes('1 ano')))
-        ) {
-          return lowerY.includes('1 ano e 7 meses a 3 anos e 11 meses');
-        }
-        if (
-          textContext.includes('pequena') ||
-          (textContext.includes('infantil') && (textContext.includes('4') || textContext.includes('5')))
-        ) {
-          return lowerY.includes('4 anos a 5 anos e 11 meses');
-        }
-        if (textContext.includes('infantil')) {
-          return lowerY.includes('infantil');
-        }
-        if (textContext.includes('1º') || textContext.includes('1o') || textContext.includes('primeiro')) {
-          return lowerY.includes('1º ano do ensino fundamental');
-        }
-        if (textContext.includes('2º') || textContext.includes('2o') || textContext.includes('segundo')) {
-          return lowerY.includes('2º ano do ensino fundamental');
-        }
-        if (textContext.includes('3º') || textContext.includes('3o') || textContext.includes('terceiro')) {
-          return lowerY.includes('3º ano do ensino fundamental');
-        }
-        if (textContext.includes('4º') || textContext.includes('4o') || textContext.includes('quarto')) {
-          return lowerY.includes('4º ano do ensino fundamental');
-        }
-        if (textContext.includes('5º') || textContext.includes('5o') || textContext.includes('quinto')) {
-          return lowerY.includes('5º ano do ensino fundamental');
-        }
-        return textContext.includes(lowerY);
+      const allYears = await this.prisma.applicationYear.findMany({
+        select: { id: true, name: true, stage: true, targetAge: true },
       });
+      const matchedYear = matchApplicationYear(textContext, allYears);
 
-      const allComps = await this.prisma.curricularComponent.findMany({ select: { id: true, name: true } });
-      const matchedComp = allComps.find((c) => {
-        const lowerC = c.name.toLowerCase();
-        if (
-          textContext.includes('corpo') ||
-          textContext.includes('gesto') ||
-          textContext.includes('movimento') ||
-          textContext.includes('motora') ||
-          textContext.includes('sensorial')
-        ) {
-          return lowerC.includes('corpo, gestos');
-        }
-        if (
-          textContext.includes('escuta') ||
-          textContext.includes('fala') ||
-          textContext.includes('balbucio') ||
-          textContext.includes('linguag') ||
-          textContext.includes('comunicação oral')
-        ) {
-          return lowerC.includes('escuta, fala');
-        }
-        if (
-          textContext.includes('eu') ||
-          textContext.includes('outro') ||
-          textContext.includes('nós') ||
-          textContext.includes('afetiv') ||
-          textContext.includes('vínculo')
-        ) {
-          return lowerC.includes('eu, o outro');
-        }
-        if (
-          textContext.includes('traço') ||
-          textContext.includes('som') ||
-          textContext.includes('cor') ||
-          textContext.includes('forma') ||
-          textContext.includes('música')
-        ) {
-          return lowerC.includes('traços, sons');
-        }
-        if (
-          textContext.includes('espaço') ||
-          textContext.includes('tempo') ||
-          textContext.includes('quantidade') ||
-          textContext.includes('natureza')
-        ) {
-          return lowerC.includes('espaços, tempos');
-        }
-        if (textContext.includes('portugu') || textContext.includes('leitura')) {
-          return lowerC.includes('portuguesa');
-        }
-        if (textContext.includes('matem') || textContext.includes('números')) {
-          return lowerC.includes('matemática');
-        }
-        if (textContext.includes('ciênc')) {
-          return lowerC.includes('ciências');
-        }
-        return textContext.includes(lowerC);
+      const allComps = await this.prisma.curricularComponent.findMany({
+        select: { id: true, name: true },
       });
+      const matchedComp = matchCurricularComponent(textContext, allComps);
 
       if (matchedYear || matchedComp) {
         return await this.prisma.bnccSkill.findMany({

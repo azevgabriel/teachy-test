@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { SinglePatchOperation } from '../../ai/patch/planning-patch.schema.js';
 import type { PlanningGranularity } from '@prisma/client';
+import { matchApplicationYear, matchCurricularComponent } from '../utils/index.js';
 
 type UpsertPlanningData = Extract<SinglePatchOperation, { operation: 'UPSERT_PLANNING' }>['data'];
 
@@ -14,45 +15,22 @@ export class UpsertPlanningUseCase {
   async execute(sessionId: string, data: UpsertPlanningData) {
     this.logger.log(`Executando UpsertPlanning para sessão ${sessionId}`);
 
-    // 1. Resolver ApplicationYear se fornecido por nome ou ID
+    // 1. Resolver ApplicationYear se fornecido por nome ou ID com alta precisão
     let applicationYearId = data.applicationYearId;
     if (!applicationYearId && data.applicationYearName) {
-      const yearName = data.applicationYearName.toLowerCase();
       const allYears = await this.prisma.applicationYear.findMany();
-      const matched = allYears.find((y) => {
-        const n = y.name.toLowerCase();
-        if (yearName.includes('infantil') && yearName.includes('2')) {
-          return n.includes('infantil') && (n.includes('1 ano e 7') || n.includes('2'));
-        }
-        if (yearName.includes('3º') || yearName.includes('3o') || yearName.includes('terceiro')) {
-          return n.includes('3º') || n.includes('3');
-        }
-        if (yearName.includes('5º') || yearName.includes('5o') || yearName.includes('quinto')) {
-          return n.includes('5º') || n.includes('5');
-        }
-        return n.includes(yearName) || yearName.includes(n);
-      });
+      const matched = matchApplicationYear(data.applicationYearName, allYears);
       if (matched) {
         applicationYearId = matched.id;
       }
     }
 
-    // 2. Resolver CurricularComponents por nome
+    // 2. Resolver CurricularComponents por nome com separação rigorosa de campos da Ed. Infantil
     const componentIds: string[] = [];
     if (data.curricularComponentNames && data.curricularComponentNames.length > 0) {
       const allComponents = await this.prisma.curricularComponent.findMany();
       for (const reqName of data.curricularComponentNames) {
-        const lowerReq = reqName.toLowerCase();
-        const found = allComponents.find((c) => {
-          const lowerC = c.name.toLowerCase();
-          if (lowerReq.includes('portugu') || lowerReq.includes('linguag') || lowerReq.includes('escuta')) {
-            return lowerC.includes('portuguesa') || lowerC.includes('escuta');
-          }
-          if (lowerReq.includes('matem') || lowerReq.includes('espaço') || lowerReq.includes('quantidad')) {
-            return lowerC.includes('matemática') || lowerC.includes('espaços');
-          }
-          return lowerC.includes(lowerReq) || lowerReq.includes(lowerC);
-        });
+        const found = matchCurricularComponent(reqName, allComponents);
         if (found && !componentIds.includes(found.id)) {
           componentIds.push(found.id);
         }
@@ -97,6 +75,8 @@ export class UpsertPlanningUseCase {
         },
       });
     } else {
+      const yearChanged = applicationYearId && applicationYearId !== planning.applicationYearId;
+
       planning = await this.prisma.planning.update({
         where: { id: planning.id },
         data: {
@@ -114,12 +94,28 @@ export class UpsertPlanningUseCase {
             : {}),
         },
       });
+
+      // Se a etapa/ano mudou e nenhum novo bnccCode foi fornecido, limpa objetivos macro da etapa anterior
+      if (yearChanged && (!data.bnccCodes || data.bnccCodes.length === 0)) {
+        await this.prisma.learningObjective.deleteMany({
+          where: { planningId: planning.id },
+        });
+      }
     }
 
     // 5. Vincular Habilidades BNCC Macro (LearningObjective XOR: planning_id preenchido)
     if (data.bnccCodes && data.bnccCodes.length > 0) {
       const skills = await this.prisma.bnccSkill.findMany({
         where: { code: { in: data.bnccCodes } },
+      });
+
+      // Sincroniza habilidades macro: remove as que não estão mais presentes na lista informada
+      const activeSkillIds = skills.map((s) => s.id);
+      await this.prisma.learningObjective.deleteMany({
+        where: {
+          planningId: planning.id,
+          bnccSkillId: { notIn: activeSkillIds },
+        },
       });
 
       for (const skill of skills) {

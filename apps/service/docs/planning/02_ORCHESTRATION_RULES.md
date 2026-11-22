@@ -136,3 +136,19 @@ Planning modifications are strictly decoupled from mid-flight streaming:
    - The message is flagged as `interrupted: true`.
    - **Zero planning mutations are committed to PostgreSQL**.
    - The previously established lesson plan draft remains fully preserved and uncorrupted.
+
+---
+
+## 9. O Princípio da Linha d'Água (Watermark Boundary) no Histórico Pós-Reset
+
+### A. O Desafio da Contaminação de Contexto Pós-Reset
+Mesmo que o banco de dados seja limpo via `RESET_PLANNING`, uma janela deslizante ingênua (ex.: `conversations.slice(-4)`) enviaria mensagens do plano antigo para a LLM e para a busca prévia de BNCC. Isso fazia a IA continuar insistindo em termos anteriores (ex.: "Educação Infantil", "bebês") mesmo após o professor pedir para mudar de rumo.
+
+### B. Demarcação por Linha d'Água (Watermark)
+- Quando um comando de recomeço (`RESET_PLANNING`) ocorre na sessão (registrado em `Conversation.commands` ou acionado por intenção de recomeço):
+  * Estabelece-se uma **Linha d'Água temporal (*Watermark Boundary*)**.
+  * **Todas as mensagens anteriores ao recomeço são sumariamente eliminadas** da janela enviada à LLM e do extrator prévio de palavras-chave.
+  * O histórico conversacional recomeça estritamente a partir do comando de recomeço, garantindo que o novo plano inicie 100% limpo ("zerado").
+
+### C. Transição Imediata de Rumo sem Atrito (Anti-Insistência)
+Quando o professor indica uma mudança de rumo (ex.: *"Não vamos manter o infantil, vamos mudar para o 3º ano do EM"*), o modelo deve acolher imediatamente a nova escolha sem insistir em confirmações repetitivas sobre o contexto descartado, emitindo prontamente o patch `UPSERT_PLANNING` com a nova etapa do catálogo oficial.

@@ -27,10 +27,11 @@ flowchart TD
 ---
 
 ## 0. Initial Setup & Definitive Parameters (`UPSERT_PLANNING`)
-* **Teacher Command:** *"I want to create a monthly math plan for the 3rd grade covering BNCC skills EF03MA01 and EF03MA02"*.
+* **Teacher Command:** *"I want to create a monthly math plan for the 3rd grade covering BNCC skills EF03MA01 and EF03MA02"* or *"Let's switch to High School 3rd year in Portuguese"*.
 * **AI Behavior:**
   - Detects consolidated planning parameters (subject, grade level, cycle granularity, dates, and BNCC objectives).
-  - Emits the `UPSERT_PLANNING` payload containing header fields, connected curricular components, macro `learningObjectives`, and initial skeleton `planning_blocks`.
+  - Emits the `UPSERT_PLANNING` payload utilizing **rigorously the official string catalog** for `applicationYearName` (e.g. `"3º ano do Ensino Médio"`) and `curricularComponentNames` (e.g. `["Língua Portuguesa"]`).
+  - **Dynamic Pivot Support:** When the teacher redirects the plan to another grade or subject mid-conversation, emits `UPSERT_PLANNING` with the new target parameters, atomically purging obsolete macro `learningObjectives` from the previous stage.
 * **Prisma Operation:**
   ```typescript
   await prisma.planning.upsert({
@@ -161,11 +162,12 @@ flowchart TD
 ---
 
 ## 7. Full Planning Reset (`RESET_PLANNING`)
-* **Teacher Command:** *"I don't like how this turned out; let's start over from scratch"*.
+* **Teacher Command:** *"I don't like how this turned out; let's start over from scratch"* or *"Quero recomeçar do zero"*.
 * **AI Behavior:**
+  - Emits the `RESET_PLANNING` payload (`{ "operation": "RESET_PLANNING", "data": {} }`).
   - Executes cascading deletion of the session's planning and specifications:
     ```typescript
     await prisma.planning.deleteMany({ where: { sessionId } });
     await prisma.specification.deleteMany({ where: { sessionId } });
     ```
-  - Resets the dialogue state to the initial discovery phase.
+  - **Watermark Pruning:** Triggers historical context demarcation in `ChatService`, purging conversations prior to the reset point and starting the discovery phase 100% clean without residual terms from the discarded plan.
