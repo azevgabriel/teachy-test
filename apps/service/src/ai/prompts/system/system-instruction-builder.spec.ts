@@ -11,7 +11,7 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     const instruction = SystemInstructionBuilder.build();
 
     // 1. Persona Base & Antidump Guardrail
-    expect(instruction).toContain('Assistente Pedagógico Teachy — Persona & Co-criação');
+    expect(instruction).toContain('Assistente Pedagógico Teachy — Co-piloto de Planejamento Escolar');
     expect(instruction).toContain('Regra Antidump de Tabelas');
     expect(instruction).toContain('Living Draft');
 
@@ -36,10 +36,15 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     expect(instruction).toContain('DELETE_BLOCK_WITH_GAP');
     expect(instruction).toContain('RESET_PLANNING');
 
-    // 5. Orientações de Fase Padrão (Discovery quando sem snapshot)
+    // 5. Protocolo de Saída Dupla & Envelope de Persistência
+    expect(instruction).toContain('Protocolo de Saída Dupla & Envelope Estruturado de Persistência');
+    expect(instruction).toContain('PLANNING_PATCH');
+    expect(instruction).toContain('UPSERT_PLANNING');
+
+    // 6. Orientações de Fase Padrão (Discovery quando sem snapshot)
     expect(instruction).toContain('Fase Atual: Descoberta');
 
-    // 6. Snapshot Consolidado como Fonte Única da Verdade
+    // 7. Snapshot Consolidado como Fonte Única da Verdade
     expect(instruction).toContain('Snapshot Consolidado do Banco de Dados (Fonte Única da Verdade)');
   });
 

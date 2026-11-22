@@ -11,6 +11,7 @@ model Conversation {
   session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   text        String           @db.Text
   type        ConversationType
+  commands    Json?            @map("commands")
   interrupted Boolean          @default(false)
   createdAt   DateTime         @default(now()) @map("created_at")
 

@@ -5,12 +5,17 @@ import {
   SystemInstructionBuilder,
   type PlanningSnapshot,
 } from '../ai/prompts/system/index.js';
+import {
+  DualOutputStreamTransformer,
+  type PlanningPatchPayload,
+} from '../ai/patch/index.js';
 import type { CreateSessionDto } from './dto/create-session.dto.js';
 import type { Conversation, Session } from '@prisma/client';
 
 export interface StreamResult {
   message: Conversation;
   cancelled: boolean;
+  patch?: PlanningPatchPayload | null;
 }
 
 /**
@@ -225,6 +230,7 @@ export class ChatService {
 
     let accumulatedText = '';
     let cancelled = false;
+    const transformer = new DualOutputStreamTransformer();
 
     try {
       await this.aiService.streamChat({
@@ -233,14 +239,16 @@ export class ChatService {
         signal,
         systemInstruction,
         onChunk: (chunk) => {
-          accumulatedText += chunk;
-          onChunk(chunk, aiMessage.id);
-          this.prisma.conversation
-            .update({
-              where: { id: aiMessage.id },
-              data: { text: accumulatedText },
-            })
-            .catch(() => {});
+          transformer.processChunk(chunk, (visualChunk) => {
+            accumulatedText += visualChunk;
+            onChunk(visualChunk, aiMessage.id);
+            this.prisma.conversation
+              .update({
+                where: { id: aiMessage.id },
+                data: { text: accumulatedText },
+              })
+              .catch(() => {});
+          });
         },
       });
     } catch (err: unknown) {
@@ -270,9 +278,12 @@ export class ChatService {
       });
     }
 
+    const parseResult = transformer.finalize();
+    const cleanFinalText = parseResult.cleanText || accumulatedText;
+
     // 5. Se cancelado antes de gerar qualquer resposta (fase de pensamento/preparação):
     // Exclui a mensagem vazia da IA e retorna a mensagem do usuário interrompida
-    if (cancelled && accumulatedText.trim().length === 0) {
+    if (cancelled && cleanFinalText.trim().length === 0) {
       const updatedUserMessage = await this.prisma.conversation.findUnique({
         where: { id: userMessage.id },
       });
@@ -289,14 +300,16 @@ export class ChatService {
       return {
         message: updatedUserMessage!,
         cancelled: true,
+        patch: null,
       };
     }
 
-    // 6. Atualizar o registro da mensagem da IA com o texto final e flag de interrupção
+    // 6. Atualizar o registro da mensagem da IA com o texto final, comandos estruturados e flag de interrupção
     const finalAiMessage = await this.prisma.conversation.update({
       where: { id: aiMessage.id },
       data: {
-        text: accumulatedText || (cancelled ? '(Resposta interrompida pelo usuário)' : ''),
+        text: cleanFinalText || (cancelled ? '(Resposta interrompida pelo usuário)' : ''),
+        commands: cancelled ? null : ((parseResult.patch as any) ?? null),
         interrupted: cancelled,
       },
     });
@@ -310,6 +323,7 @@ export class ChatService {
     return {
       message: finalAiMessage,
       cancelled,
+      patch: cancelled ? null : parseResult.patch,
     };
   }
 }

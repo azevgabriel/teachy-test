@@ -2,6 +2,7 @@ import { BASE_SYSTEM_PROMPT } from './base.system.js';
 import { PEDAGOGICAL_RULES_SYSTEM_PROMPT } from './pedagogical-rules.system.js';
 import { EVALUATION_RULES_SYSTEM_PROMPT } from './evaluation-rules.system.js';
 import { INTENT_MATRIX_SYSTEM_PROMPT } from './intent-matrix.system.js';
+import { PATCH_PROTOCOL_SYSTEM_PROMPT } from './patch-protocol.system.js';
 import {
   PHASE_PROMPTS,
   inferPlanningPhase,
@@ -37,6 +38,8 @@ export class SystemInstructionBuilder {
       EVALUATION_RULES_SYSTEM_PROMPT,
       '---',
       INTENT_MATRIX_SYSTEM_PROMPT,
+      '---',
+      PATCH_PROTOCOL_SYSTEM_PROMPT,
       '---',
       `# Orientações da Fase Atual\n\n${phasePrompt}`,
       '---',
