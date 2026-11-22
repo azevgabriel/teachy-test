@@ -22,7 +22,33 @@ import {
 	type PageOrientation,
 	paginatePlanning,
 } from "./paginatePlanning";
-import type { PlanningResponseDto } from "./types";
+import type { PlanningResponseDto, Specification } from "./types";
+
+const EMPTY_SPECS: Specification[] = [];
+
+function areHeightsEqual(
+	a: MeasuredHeights | null,
+	b: MeasuredHeights | null,
+): boolean {
+	if (a === b) return true;
+	if (!a || !b) return false;
+	if (
+		a.sheetHeight !== b.sheetHeight ||
+		a.headerHeight !== b.headerHeight ||
+		a.runningHeaderHeight !== b.runningHeaderHeight ||
+		a.sectionTitleHeight !== b.sectionTitleHeight ||
+		a.tableHeaderHeight !== b.tableHeaderHeight ||
+		a.tableContainerMargin !== b.tableContainerMargin ||
+		a.footerHeight !== b.footerHeight ||
+		a.paddingY !== b.paddingY
+	) {
+		return false;
+	}
+	const aKeys = Object.keys(a.rowHeights);
+	const bKeys = Object.keys(b.rowHeights);
+	if (aKeys.length !== bKeys.length) return false;
+	return aKeys.every((k) => a.rowHeights[k] === b.rowHeights[k]);
+}
 
 interface PlanningViewerProps {
 	sessionId?: string;
@@ -60,9 +86,10 @@ export function PlanningViewer({
 	const measureFooterRef = React.useRef<HTMLDivElement>(null);
 
 	const planning = data?.planning ?? null;
-	const specifications = Array.isArray(data?.specifications)
-		? data.specifications
-		: [];
+	const specifications =
+		Array.isArray(data?.specifications) && data.specifications.length > 0
+			? data.specifications
+			: EMPTY_SPECS;
 	const hasBlocks = (planning?.blocks?.length ?? 0) > 0;
 
 	// Monitora ativamente o redimensionamento do painel e do navegador via ResizeObserver
@@ -72,7 +99,8 @@ export function PlanningViewer({
 
 		const updateDimensions = () => {
 			if (el) {
-				setContainerWidth(el.clientWidth);
+				const nextWidth = el.clientWidth;
+				setContainerWidth((prev) => (prev === nextWidth ? prev : nextWidth));
 			}
 		};
 
@@ -89,11 +117,9 @@ export function PlanningViewer({
 
 	// Medição dinâmica em DOM real para empacotamento exato por margens
 	React.useLayoutEffect(() => {
-		// Garante que reordenação ou visibilidade de especificações acione nova medição
 		void specifications;
-
 		if (!planning || !hasBlocks) {
-			setMeasuredHeights((prev) => (prev !== null ? null : prev));
+			setMeasuredHeights((prev) => (prev === null ? prev : null));
 			return;
 		}
 
@@ -160,18 +186,7 @@ export function PlanningViewer({
 		};
 
 		setMeasuredHeights((prev) => {
-			if (
-				prev &&
-				prev.sheetHeight === nextHeights.sheetHeight &&
-				prev.headerHeight === nextHeights.headerHeight &&
-				prev.tableHeaderHeight === nextHeights.tableHeaderHeight &&
-				prev.paddingY === nextHeights.paddingY &&
-				Object.keys(prev.rowHeights).length ===
-					Object.keys(rowHeights).length &&
-				Object.keys(rowHeights).every(
-					(k) => prev.rowHeights[k] === rowHeights[k],
-				)
-			) {
+			if (areHeightsEqual(prev, nextHeights)) {
 				return prev;
 			}
 			return nextHeights;

@@ -9,6 +9,9 @@ export const PEDAGOGICAL_RULES_SYSTEM_PROMPT = `
     * Se o plano for para 1 bimestre, a granularidade macro é **\`BIMONTHLY\`**.
     * Se o plano for para 1 trimestre, a granularidade macro é **\`TRIMESTER\`**.
     * A granularidade macro \`DAILY\` só deve ser utilizada se o planejamento consistir estritamente em um plano de aula avulso de 1 único dia.
+- **Hierarquia Estrita de Granularidade:**
+  - A granularidade do bloco filho deve ser estritamente menor que a do pai (\`ANNUAL > SEMESTER > TRIMESTER > BIMONTHLY > MONTHLY > WEEKLY > DAILY\`).
+  - Em um planejamento semanal (\`WEEKLY\`), os blocos filhos diretos são OBRIGATORIAMENTE persistidos como \`DAILY\`, JAMAIS como blocos semanais (\`WEEKLY\`).
 - **TRIMESTRAL / SEMESTRAL (Macro):** Desdobre em no máximo 2 níveis (Trimestre -> Mensal -> Semanal). Não gere 60 a 80 aulas diárias de uma só vez para não esgotar a janela de contexto nem sobrecarregar o professor.
 - **MENSAL / BIMESTRAL (Intermediário):** Contexto com objetivos do mês, desdobrando em semanas ou dias conforme o professor solicitar.
 - **SEMANAL / DIÁRIO (Cirúrgico / Chão de Sala):** Foco em aulas individuais, detalhando metodologia ativa, habilidades BNCC e instrumentos avaliativos pontuais.
@@ -29,10 +32,12 @@ export const PEDAGOGICAL_RULES_SYSTEM_PROMPT = `
 - **Sugestões Proativas da IA:** Sempre filtre as sugestões iniciais de habilidades pelo ano de aplicação (\`ApplicationYear\`) e componente curricular do planejamento.
 - **Soberania do Professor ("O professor falou, tá falado"):** A sala de aula é heterogênea. Se o professor indicar que a turma possui defasagem de aprendizagem (necessitando de habilidades de anos anteriores para recomposição) ou estiver adiantada (necessitando de habilidades de anos posteriores), **acolha plenamente a decisão** sem impor bloqueios ou atritos.
 
-## 4. Guardrails Temporais & Calendário
+## 4. Guardrails Temporais, Calendário & Recessos
 - Converta menções naturais do calendário em datas ISO coerentes (ex: início de fevereiro -> 2026-02-01T00:00:00Z).
 - **Proibição de Inversão de Datas:** Jamais permita que a data de término (\`endAt\`) seja anterior à de início (\`startAt\`).
 - **Confinamento Temporal:** Datas de blocos filhos ou avaliações devem residir estritamente dentro da janela do período pai.
+- **Respeito a Dias Não Letivos:** Aulas nunca devem ser alocadas em fins de semana (sábado/domingo), feriados nacionais ou recessos locais informados pelo professor. Consulte a lista de dias letivos válidos mastigada no Snapshot.
+- **Realocação em Cascata:** Ao receber avisos de novos recessos ou dias sem aula (ex.: *"dia 04/08 e 06/08 são feriados, não vai ter aula"*), emita \`REALLOCATE_LESSONS\` (ou \`UPSERT_PLANNING\` informando \`recessDates\`). O sistema empurra automaticamente as aulas afetadas para os próximos dias letivos disponíveis e expande o período (\`endAt\`), preservando integralmente os conteúdos e metodologias.
 
 ## 5. Vocabulário de Domínio & Mapeamento Natural
 - Mapeie expressões naturais do professor para as entidades relacionais correspondentes:

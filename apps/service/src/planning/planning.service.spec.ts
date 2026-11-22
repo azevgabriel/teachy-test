@@ -9,6 +9,7 @@ import {
   DeleteBlockUseCase,
   ReorganizeHierarchyUseCase,
   ResetPlanningUseCase,
+  ReallocateLessonsUseCase,
 } from './use-cases/index.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 
@@ -23,11 +24,13 @@ describe('PlanningService', () => {
   let deleteBlockUseCase: DeleteBlockUseCase;
   let reorganizeHierarchyUseCase: ReorganizeHierarchyUseCase;
   let resetPlanningUseCase: ResetPlanningUseCase;
+  let reallocateLessonsUseCase: ReallocateLessonsUseCase;
   let upsertSpy: any;
   let swapSpy: any;
   let batchSpy: any;
   let addSpecSpy: any;
   let resetSpy: any;
+  let reallocateSpy: any;
 
   beforeEach(() => {
     prismaMock = {
@@ -93,6 +96,7 @@ describe('PlanningService', () => {
     deleteBlockUseCase = new DeleteBlockUseCase(prismaMock as unknown as PrismaService);
     reorganizeHierarchyUseCase = new ReorganizeHierarchyUseCase(prismaMock as unknown as PrismaService);
     resetPlanningUseCase = new ResetPlanningUseCase(prismaMock as unknown as PrismaService);
+    reallocateLessonsUseCase = new ReallocateLessonsUseCase(prismaMock as unknown as PrismaService);
 
     upsertSpy = vi.spyOn(upsertPlanningUseCase, 'execute').mockResolvedValue({ id: 'p1' } as any);
     swapSpy = vi.spyOn(swapBlockByDateUseCase, 'execute').mockResolvedValue({ id: 'b1' } as any);
@@ -102,6 +106,7 @@ describe('PlanningService', () => {
     vi.spyOn(deleteBlockUseCase, 'execute').mockResolvedValue({ deletedBlockId: 'b1', gapDate: null });
     vi.spyOn(reorganizeHierarchyUseCase, 'execute').mockResolvedValue(undefined);
     resetSpy = vi.spyOn(resetPlanningUseCase, 'execute').mockResolvedValue(undefined);
+    reallocateSpy = vi.spyOn(reallocateLessonsUseCase, 'execute').mockResolvedValue({ id: 'p1' } as any);
 
     planningService = new PlanningService(
       prismaMock as unknown as PrismaService,
@@ -113,6 +118,7 @@ describe('PlanningService', () => {
       deleteBlockUseCase,
       reorganizeHierarchyUseCase,
       resetPlanningUseCase,
+      reallocateLessonsUseCase,
     );
   });
 
@@ -128,6 +134,18 @@ describe('PlanningService', () => {
 
       await planningService.applyPatch('s1', payload);
       expect(upsertSpy).toHaveBeenCalledWith('s1', payload.data);
+    });
+
+    it('dispatches REALLOCATE_LESSONS to ReallocateLessonsUseCase', async () => {
+      const payload = {
+        operation: 'REALLOCATE_LESSONS' as const,
+        data: {
+          recessDates: ['2026-08-04', '2026-08-06'],
+        },
+      };
+
+      await planningService.applyPatch('s1', payload);
+      expect(reallocateSpy).toHaveBeenCalledWith('s1', payload.data);
     });
 
     it('dispatches UPDATE_BLOCK_BY_DATE to SwapBlockByDateUseCase', async () => {
@@ -153,7 +171,14 @@ describe('PlanningService', () => {
     it('dispatches ADD_SPECIFICATION to AddSpecificationWithSlotsUseCase', async () => {
       const payload = {
         operation: 'ADD_SPECIFICATION' as const,
-        data: { colName: 'recursos', tableRef: 'PLANNING_BLOCK' as const, isRequired: true },
+        data: {
+          colName: 'recursos',
+          tableRef: 'PLANNING_BLOCK' as const,
+          isRequired: true,
+          order: 0,
+          isVisible: true,
+          showLabel: true,
+        },
       };
 
       await planningService.applyPatch('s1', payload);

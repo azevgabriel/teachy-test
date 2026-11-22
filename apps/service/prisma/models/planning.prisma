@@ -23,6 +23,7 @@ model Planning {
   startAt              DateTime?               @map("start_at")
   endAt                DateTime?               @map("end_at")
   granularity          PlanningGranularity?
+  recessDates          String[]                @default([]) @map("recess_dates")
   blocks               PlanningBlock[]
   learningObjectives   LearningObjective[]
   metadataValues       PlanningMetadataValue[]

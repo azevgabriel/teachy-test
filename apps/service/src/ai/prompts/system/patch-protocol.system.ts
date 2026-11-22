@@ -23,6 +23,7 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
      * Para Língua Portuguesa, use rigorosamente \`"Língua Portuguesa"\` (JAMAIS associe campos da Educação Infantil como \`"Escuta, fala, pensamento e imaginação"\` para turmas de EF ou EM).
    - **Mudança de Direção / Troca de Etapa ou Componente:** Sempre que o professor mudar de ideia ou redirecionar o planejamento (ex.: *"Não vamos manter o infantil, vamos mudar para o 3º ano do EM"* ou *"Vou trabalhar com Língua Portuguesa durante 3 meses"*), emita IMEDIATAMENTE o \`UPSERT_PLANNING\` atualizando explicitamente o \`applicationYearName\` e/ou \`curricularComponentNames\` com a nomenclatura oficial.
    - **Remoção de BNCCs do Cabeçalho Macro:** Passar \`"bnccCodes": []\` remove explicitamente todas as habilidades macro vinculadas ao cabeçalho \`Planning\`, sem alterar as habilidades dos blocos diários.
+   - **Recessos Escolares & Dias Sem Aula:** Passe \`"recessDates": ["2026-08-04", "2026-08-06"]\` para registrar dias de recesso na sessão.
    - Formato suportado do data:
 \`\`\`json
 {
@@ -31,6 +32,7 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
   "applicationYearName": "Ensino Infantil (zero a 1 ano e 6 meses)",
   "startAt": "2026-03-02T00:00:00Z",
   "endAt": "2026-03-06T23:59:59Z",
+  "recessDates": ["2026-03-04"],
   "bnccCodes": ["EI01CG01"],
   "specifications": [
     { "colName": "curricularComponents", "tableRef": "PLANNING", "customLabel": "Disciplina", "order": 1, "isVisible": true, "showLabel": true },
@@ -91,9 +93,14 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
    - A emissão deste patch apaga o planejamento anterior no PostgreSQL e zera a contaminação de contexto das mensagens anteriores, permitindo iniciar um novo planejamento 100% limpo.
    - Formato: \`{ "operation": "RESET_PLANNING", "data": {} }\`
 
-9. **\`READ_ONLY\` (Consulta Analítica):**
-   - Use quando a mensagem do professor for uma pergunta puramente analítica/informativa sem mutações de dados.
-   - Formato: \`{ "operation": "READ_ONLY", "data": { "queryType": "COUNT_CLASSES" } }\`
+9. **\`REALLOCATE_LESSONS\` (Realocação em Cascata por Feriados e Recessos):**
+   - Use quando o professor informar dias sem aula, feriados ou recessos (ex.: *"Dia 04/08 e 06/08 são feriados, não vai ter aula"*).
+   - O backend desloca as aulas subsequentes em cascata para os próximos dias letivos (pulando sábados, domingos, feriados nacionais e os recessos informados) e atualiza a data final do ciclo (\`endAt\`), mantendo os conteúdos e metodologias 100% preservados.
+   - Formato: \`{ "operation": "REALLOCATE_LESSONS", "data": { "recessDates": ["2026-08-04", "2026-08-06"] } }\`
+
+10. **\`READ_ONLY\` (Consulta Analítica):**
+    - Use quando a mensagem do professor for uma pergunta puramente analítica/informativa sem mutações de dados.
+    - Formato: \`{ "operation": "READ_ONLY", "data": { "queryType": "COUNT_CLASSES" } }\`
 
 ## 3. Cadência & Prevenção de Ansiedade:
 - **Não gere blocos precipitadamente:** Durante a fase de Descoberta (enquanto o professor ainda estiver respondendo dúvidas iniciais sobre disciplina, período, semanas ou temas), **NÃO emita uma árvore massiva de blocos com dezenas de metodologias**.

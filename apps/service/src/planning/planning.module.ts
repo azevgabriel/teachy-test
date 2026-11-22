@@ -11,6 +11,7 @@ import {
   DeleteBlockUseCase,
   ReorganizeHierarchyUseCase,
   ResetPlanningUseCase,
+  ReallocateLessonsUseCase,
 } from './use-cases/index.js';
 
 @Module({
@@ -26,7 +27,8 @@ import {
     DeleteBlockUseCase,
     ReorganizeHierarchyUseCase,
     ResetPlanningUseCase,
+    ReallocateLessonsUseCase,
   ],
-  exports: [PlanningService],
+  exports: [PlanningService, ReallocateLessonsUseCase],
 })
 export class PlanningModule {}

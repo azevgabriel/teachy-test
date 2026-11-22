@@ -13,6 +13,7 @@ import {
   DeleteBlockUseCase,
   ReorganizeHierarchyUseCase,
   ResetPlanningUseCase,
+  ReallocateLessonsUseCase,
 } from './use-cases/index.js';
 import type { PlanningResponseDto } from './dto/planning-response.dto.js';
 
@@ -30,6 +31,7 @@ export class PlanningService {
     private readonly deleteBlockUseCase: DeleteBlockUseCase,
     private readonly reorganizeHierarchyUseCase: ReorganizeHierarchyUseCase,
     private readonly resetPlanningUseCase: ResetPlanningUseCase,
+    private readonly reallocateLessonsUseCase: ReallocateLessonsUseCase,
   ) {}
 
   /**
@@ -65,6 +67,9 @@ export class PlanningService {
           break;
         case 'RESET_PLANNING':
           await this.resetPlanningUseCase.execute(sessionId);
+          break;
+        case 'REALLOCATE_LESSONS':
+          await this.reallocateLessonsUseCase.execute(sessionId, op.data);
           break;
         case 'READ_ONLY':
           // Consulta somente leitura: zero mutações
