@@ -14,14 +14,45 @@ This document catalogs teacher conversational intents, their dialogue workflows,
 flowchart TD
     Msg["Teacher Input"] --> Classifier{"Intent Classifier"}
     
+    Classifier -->|0. Initial Setup / Definitive Data| I0["UPSERT_PLANNING\nCreates/updates macro header, BNCC and initial block tree"]
     Classifier -->|1. Point Replacement| I1["UPDATE_BLOCK_BY_DATE\nLocates block by date and modifies content"]
     Classifier -->|2. Column Disambiguation| I2["ADD_SPECIFICATION_PENDING\nInquires scope and requests required values"]
     Classifier -->|3. Tree Reorganization| I3["REORGANIZE_TREE\nCreates parent blocks and reparents children via parentId"]
-    Classifier -->|4. Text Refinement| I4["BATCH_UPDATE_METODOLOGIA\nCompresses methodology across target blocks"]
+    Classifier -->|4. Batch Column Update| I4["BATCH_UPDATE_COLUMN\nUpdates native or EAV column across target granularity"]
     Classifier -->|5. Analytical Query| I5["READ_ONLY\nComputes response without database mutations"]
     Classifier -->|6. Block Deletion| I6["DELETE_BLOCK_WITH_GAP\nDeletes block and guides remediation of time gap"]
     Classifier -->|7. Full Reset| I7["RESET_PLANNING\nCascading reset to restart planning workflow"]
 ```
+
+---
+
+## 0. Initial Setup & Definitive Parameters (`UPSERT_PLANNING`)
+* **Teacher Command:** *"I want to create a monthly math plan for the 3rd grade covering BNCC skills EF03MA01 and EF03MA02"*.
+* **AI Behavior:**
+  - Detects consolidated planning parameters (subject, grade level, cycle granularity, dates, and BNCC objectives).
+  - Emits the `UPSERT_PLANNING` payload containing header fields, connected curricular components, macro `learningObjectives`, and initial skeleton `planning_blocks`.
+* **Prisma Operation:**
+  ```typescript
+  await prisma.planning.upsert({
+    where: { sessionId },
+    create: {
+      sessionId,
+      granularity: 'MONTHLY',
+      curricularComponents: { connect: [{ id: mathComponentId }] },
+      applicationYearId: thirdGradeId,
+      blocks: {
+        create: initialBlocksData,
+      },
+      learningObjectives: {
+        create: bnccSkillIds.map((skillId) => ({ bnccSkillId: skillId })),
+      },
+    },
+    update: {
+      granularity: 'MONTHLY',
+      applicationYearId: thirdGradeId,
+    },
+  });
+  ```
 
 ---
 
@@ -85,12 +116,29 @@ flowchart TD
 
 ---
 
-## 4. Batch Text Compression (`BATCH_UPDATE_METODOLOGIA`)
-* **Teacher Command:** *"Make the didactic sequences more concise"*.
+## 4. Batch Column Update & Compression (`BATCH_UPDATE_COLUMN`)
+* **Teacher Command:** *"Make the didactic sequences more concise across all weeks"* or *"Shorten the teaching resources description in the weekly blocks"*.
 * **AI Behavior:**
-  - Checks whether the target is the native `metodologia` column or a custom metadata value.
-  - Rewrites target texts into succinct, bulleted pedagogical action items.
-  - Updates matching database rows.
+  - Identifies target granularity (e.g. `WEEKLY`) and target column.
+  - Distinguishes whether the target is the physical native `metodologia` column in `planning_blocks` or an EAV dynamic column in `planning_metadata_values`.
+  - Rewrites/updates target texts across all matching blocks in batch.
+* **Prisma Operation:**
+  ```typescript
+  // Native column batch update:
+  await prisma.planningBlock.updateMany({
+    where: { planningId, granularity: 'WEEKLY' },
+    data: { metodologia: 'Concise synthesized didactic sequence...' },
+  });
+
+  // Or EAV dynamic column batch update:
+  await prisma.planningMetadataValue.updateMany({
+    where: {
+      specificationId: customSpecId,
+      planningBlock: { planningId, granularity: 'WEEKLY' },
+    },
+    data: { textValue: 'Updated concise resources...' },
+  });
+  ```
 
 ---
 

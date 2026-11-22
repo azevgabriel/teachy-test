@@ -156,3 +156,28 @@ CHECK (
 ```
 
 Persistence use cases and AI patch handlers must always populate exactly one of the foreign keys (`planning_id` or `planning_block_id`), never both and never neither.
+
+---
+
+## 5. Audit Trail & Chat History Hygiene (`Conversation.commands`)
+
+To ensure clean chat history without sacrificing structured auditability, the `Conversation` table stores visual and machine-actionable outputs separately:
+
+```prisma
+model Conversation {
+  id          String           @id @default(uuid())
+  sessionId   String           @map("session_id")
+  session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  text        String           @db.Text
+  type        ConversationType
+  commands    Json?            @map("commands") // Structured AI patch execution payload
+  interrupted Boolean          @default(false)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@map("conversations")
+}
+```
+
+### Architectural Rationale:
+1. **Context Window Hygiene:** `Conversation.text` stores strictly sanitized, human-readable Markdown. When previous messages are compiled for subsequent LLM turns, historical JSON blocks are completely excluded, preserving context window budget and respecting the Database Snapshot as the single source of truth.
+2. **Auditability & Traceability:** `Conversation.commands` records the parsed and validated patch payload executed by the AI, enabling retroactive inspection, debugging, and telemetry on planning mutations.
