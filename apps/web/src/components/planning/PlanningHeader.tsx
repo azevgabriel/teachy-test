@@ -33,11 +33,13 @@ export function formatGranularity(granularity?: string | null): string {
 function formatDate(dateStr?: string | null): string {
 	if (!dateStr) return "";
 	try {
-		const d = new Date(dateStr);
+		const safeStr = dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00Z`;
+		const d = new Date(safeStr);
 		return d.toLocaleDateString("pt-BR", {
 			day: "2-digit",
 			month: "2-digit",
 			year: "numeric",
+			timeZone: "UTC",
 		});
 	} catch {
 		return dateStr;

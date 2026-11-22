@@ -187,6 +187,22 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
       expect(prompt).toContain('[PAR] Avaliação Diagnóstica de Leitura');
       expect(prompt).toContain('REGRA DE PRECEDÊNCIA COGNITIVA ABSOLUTA');
     });
+
+    it('exibe recessos e calcula dias letivos válidos no cabeçalho do snapshot', () => {
+      const snapshot: PlanningSnapshot = {
+        planning: {
+          id: 'p-recess',
+          granularity: 'WEEKLY',
+          startAt: new Date('2026-08-03T00:00:00Z'),
+          endAt: new Date('2026-08-07T23:59:59Z'),
+          recessDates: ['2026-08-04', '2026-08-06'],
+        },
+      };
+
+      const prompt = formatSnapshotPrompt(snapshot);
+      expect(prompt).toContain('2026-08-04, 2026-08-06');
+      expect(prompt).toContain('Total de 3 dia(s) letivo(s) disponível(is): [2026-08-03, 2026-08-05, 2026-08-07]');
+    });
   });
 
   describe('custom teacher context and database catalog', () => {

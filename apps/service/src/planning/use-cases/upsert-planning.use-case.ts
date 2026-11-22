@@ -1,8 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { SinglePatchOperation } from '../../ai/patch/planning-patch.schema.js';
 import type { PlanningGranularity } from '@prisma/client';
-import { matchApplicationYear, matchCurricularComponent } from '../utils/index.js';
+import {
+  matchApplicationYear,
+  matchCurricularComponent,
+  resolveChildGranularity,
+  toISODateString,
+} from '../utils/index.js';
+import { ReallocateLessonsUseCase } from './reallocate-lessons.use-case.js';
 
 type UpsertPlanningData = Extract<SinglePatchOperation, { operation: 'UPSERT_PLANNING' }>['data'];
 
@@ -10,7 +16,10 @@ type UpsertPlanningData = Extract<SinglePatchOperation, { operation: 'UPSERT_PLA
 export class UpsertPlanningUseCase {
   private readonly logger = new Logger(UpsertPlanningUseCase.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly reallocateLessonsUseCase?: ReallocateLessonsUseCase,
+  ) {}
 
   async execute(sessionId: string, data: UpsertPlanningData) {
     this.logger.log(`Executando UpsertPlanning para sessão ${sessionId}`);
@@ -54,6 +63,12 @@ export class UpsertPlanningUseCase {
     const startAt = data.startAt ? new Date(data.startAt) : null;
     const endAt = data.endAt ? new Date(data.endAt) : null;
     const granularity = (data.granularity as PlanningGranularity) || undefined;
+    const recessDates = data.recessDates ? data.recessDates.map(toISODateString) : undefined;
+
+    // Validação Contínua de Datas: Proibição absoluta de endAt < startAt
+    if (startAt && endAt && endAt.getTime() < startAt.getTime()) {
+      throw new BadRequestException('Data de término (endAt) não pode ser anterior à data de início (startAt)');
+    }
 
     // 4. Upsert do Cabeçalho Macro Planning
     let planning = await this.prisma.planning.findFirst({
@@ -67,6 +82,7 @@ export class UpsertPlanningUseCase {
           granularity,
           startAt,
           endAt,
+          ...(recessDates ? { recessDates } : {}),
           schoolId: schoolId || null,
           applicationYearId: applicationYearId || null,
           curricularComponents: {
@@ -83,6 +99,7 @@ export class UpsertPlanningUseCase {
           ...(granularity ? { granularity } : {}),
           ...(startAt !== undefined ? { startAt } : {}),
           ...(endAt !== undefined ? { endAt } : {}),
+          ...(recessDates !== undefined ? { recessDates } : {}),
           ...(schoolId ? { schoolId } : {}),
           ...(applicationYearId ? { applicationYearId } : {}),
           ...(componentIds.length > 0
@@ -285,12 +302,29 @@ export class UpsertPlanningUseCase {
 
     // 6. Criar ou Atualizar Blocos de Planejamento (PlanningBlock)
     if (data.blocks && data.blocks.length > 0) {
+      let minBlockStart: Date | null = null;
+      let maxBlockEnd: Date | null = null;
+
       for (let i = 0; i < data.blocks.length; i++) {
         const b = data.blocks[i];
         const blockStart = b.startAt ? new Date(b.startAt) : null;
         const blockEnd = b.endAt ? new Date(b.endAt) : null;
         const blockOrder = b.order ?? i + 1;
-        const blockGranularity = (b.granularity as PlanningGranularity) || granularity;
+
+        // Validação Contínua de Datas no Bloco
+        if (blockStart && blockEnd && blockEnd.getTime() < blockStart.getTime()) {
+          throw new BadRequestException('endAt do bloco não pode ser anterior a startAt');
+        }
+
+        if (blockStart) {
+          if (!minBlockStart || blockStart.getTime() < minBlockStart.getTime()) {
+            minBlockStart = blockStart;
+          }
+          const effectiveEnd = blockEnd || blockStart;
+          if (!maxBlockEnd || effectiveEnd.getTime() > maxBlockEnd.getTime()) {
+            maxBlockEnd = effectiveEnd;
+          }
+        }
 
         // Tenta encontrar bloco existente na data ou pela ordem
         let existingBlock = null;
@@ -314,15 +348,24 @@ export class UpsertPlanningUseCase {
           });
         }
 
+        // Hierarquia Estrita de Granularidade: resolve granularidade descendente e preserva pré-existente
+        const effectiveParentGranularity = granularity || planning.granularity;
+        const blockGranularity = resolveChildGranularity(
+          effectiveParentGranularity,
+          b.granularity,
+          existingBlock?.granularity,
+        );
+
         let savedBlock;
         if (existingBlock) {
           savedBlock = await this.prisma.planningBlock.update({
             where: { id: existingBlock.id },
             data: {
-              ...(b.metodologia ? { metodologia: b.metodologia } : {}),
+              order: blockOrder,
+              ...(b.metodologia !== undefined ? { metodologia: b.metodologia } : {}),
               ...(blockStart ? { startAt: blockStart } : {}),
               ...(blockEnd !== undefined ? { endAt: blockEnd } : {}),
-              ...(blockGranularity ? { granularity: blockGranularity } : {}),
+              granularity: blockGranularity,
             },
           });
         } else {
@@ -431,6 +474,29 @@ export class UpsertPlanningUseCase {
           }
         }
       }
+
+      // Confinamento Temporal: Ajusta limites do cabeçalho se os blocos ultrapassarem startAt ou endAt
+      let shouldUpdatePlanningDates = false;
+      const dateUpdates: { startAt?: Date; endAt?: Date } = {};
+
+      if (minBlockStart && planning.startAt && minBlockStart.getTime() < new Date(planning.startAt).getTime()) {
+        dateUpdates.startAt = minBlockStart;
+        shouldUpdatePlanningDates = true;
+      }
+      if (maxBlockEnd && (!planning.endAt || maxBlockEnd.getTime() > new Date(planning.endAt).getTime())) {
+        dateUpdates.endAt = maxBlockEnd;
+        shouldUpdatePlanningDates = true;
+      }
+
+      if (shouldUpdatePlanningDates) {
+        planning = await this.prisma.planning.update({
+          where: { id: planning.id },
+          data: dateUpdates,
+        });
+      }
+    } else if (data.recessDates && data.recessDates.length > 0 && this.reallocateLessonsUseCase) {
+      // Se novos recessos foram informados e nenhum bloco específico enviado, dispara realocação em cascata
+      await this.reallocateLessonsUseCase.execute(sessionId, { recessDates: data.recessDates });
     }
 
     return planning;

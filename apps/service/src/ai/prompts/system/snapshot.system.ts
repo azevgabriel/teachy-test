@@ -1,3 +1,5 @@
+import { getSchoolDaysBetween } from '../../../planning/utils/school-calendar.js';
+
 export interface SnapshotLearningObjective {
   id: string;
   bnccSkill?: {
@@ -66,6 +68,7 @@ export interface PlanningSnapshot {
     startAt?: Date | string | null;
     endAt?: Date | string | null;
     granularity?: string | null;
+    recessDates?: string[];
     learningObjectives?: SnapshotLearningObjective[];
     evaluations?: SnapshotEvaluation[];
     metadataValues?: SnapshotMetadataValue[];
@@ -99,6 +102,19 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
   const subjects = planning.curricularComponents?.map((c) => c.name).join(', ') || 'Não informados';
   const granularity = planning.granularity || 'Não definida';
   const period = `${formatDate(planning.startAt)} até ${formatDate(planning.endAt)}`;
+
+  const recessDates = planning.recessDates || [];
+  const recessText = recessDates.length > 0
+    ? recessDates.join(', ')
+    : 'Nenhum recesso registrado';
+
+  let schoolDaysInfo = 'Não foi possível calcular os dias letivos (datas globais incompletas).';
+  if (planning.startAt && planning.endAt) {
+    const days = getSchoolDaysBetween(planning.startAt, planning.endAt, recessDates);
+    schoolDaysInfo = days.length > 0
+      ? `Total de ${days.length} dia(s) letivo(s) disponível(is): [${days.join(', ')}] (Feriados nacionais, recessos e fins de semana foram excluídos automaticamente)`
+      : 'Nenhum dia letivo encontrado no intervalo.';
+  }
 
   let blocksText = '';
   if (blocks.length === 0) {
@@ -156,7 +172,7 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
   let macroMetaText = '';
   if (planning.metadataValues && planning.metadataValues.length > 0) {
     macroMetaText = planning.metadataValues
-      .map((m) => `  - [${m.specification?.customLabel || m.specification?.colName || 'Metadado'}]: "${m.textValue || '(sem texto)'}"`)
+      .map((m) => `  - [${m.specification?.customLabel || m.specification?.colName || 'Metadado'}]: "${m.textValue || ''}"`)
       .join('\n');
   } else {
     macroMetaText = '  *Nenhum metadado de ciclo configurado.*\n';
@@ -211,6 +227,9 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
 - **Componentes Curriculares:** ${subjects}
 - **Granularidade Macro:** ${granularity}
 - **Período do Ciclo:** ${period}
+- **Recessos Escolares & Dias Sem Aula Registrados:** ${recessText}
+- **Calendário Letivo Pré-Calculado (Dias Úteis Válidos):**
+  ${schoolDaysInfo}
 - **Metadados do Ciclo (EAV):**
 ${macroMetaText}
 - **Avaliações Gerais do Ciclo (Macro):**

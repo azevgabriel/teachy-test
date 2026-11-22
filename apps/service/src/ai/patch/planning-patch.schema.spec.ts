@@ -12,14 +12,99 @@ describe('PlanningPatchSchema', () => {
         bnccCodes: ['EF03MA01', 'EF03MA02'],
         startAt: '2026-03-01T00:00:00Z',
         endAt: '2026-03-31T23:59:59Z',
+        recessDates: ['2026-03-15'],
         blocks: [
           {
             order: 1,
-            granularity: 'MONTHLY',
+            granularity: 'WEEKLY',
             metodologia: 'Introdução aos números naturais',
             bnccCodes: ['EF03MA01'],
           },
         ],
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
+  it('deve rejeitar UPSERT_PLANNING se endAt < startAt no planejamento', () => {
+    const payload = {
+      operation: 'UPSERT_PLANNING',
+      data: {
+        startAt: '2026-08-10T00:00:00Z',
+        endAt: '2026-08-05T00:00:00Z',
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
+
+  it('deve rejeitar UPSERT_PLANNING se endAt < startAt em um bloco', () => {
+    const payload = {
+      operation: 'UPSERT_PLANNING',
+      data: {
+        startAt: '2026-08-01T00:00:00Z',
+        endAt: '2026-08-30T00:00:00Z',
+        blocks: [
+          {
+            order: 1,
+            startAt: '2026-08-15T00:00:00Z',
+            endAt: '2026-08-10T00:00:00Z',
+          },
+        ],
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
+
+  it('deve rejeitar UPSERT_PLANNING com planejamento WEEKLY contendo bloco direto WEEKLY', () => {
+    const payload = {
+      operation: 'UPSERT_PLANNING',
+      data: {
+        granularity: 'WEEKLY',
+        blocks: [
+          {
+            order: 1,
+            granularity: 'WEEKLY',
+            metodologia: 'Aula 1',
+          },
+        ],
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
+
+  it('deve aceitar UPSERT_PLANNING com planejamento WEEKLY contendo bloco direto DAILY', () => {
+    const payload = {
+      operation: 'UPSERT_PLANNING',
+      data: {
+        granularity: 'WEEKLY',
+        blocks: [
+          {
+            order: 1,
+            granularity: 'DAILY',
+            metodologia: 'Aula 1',
+          },
+        ],
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
+  it('deve validar com sucesso REALLOCATE_LESSONS', () => {
+    const payload = {
+      operation: 'REALLOCATE_LESSONS',
+      data: {
+        recessDates: ['2026-08-04', '2026-08-06'],
+        startDate: '2026-08-03',
       },
     };
 
@@ -211,6 +296,7 @@ describe('PlanningPatchSchema', () => {
           {
             startAt: '2026-03-02',
             order: 1,
+            granularity: 'DAILY',
             metodologia: '1. Roda de cantigas. 2. Exploração sensorial de tecidos.',
             bnccCodes: ['EI01CG01'],
             metadataValues: [

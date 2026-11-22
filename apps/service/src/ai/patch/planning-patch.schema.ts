@@ -41,38 +41,78 @@ export const addSpecificationPatchDataSchema = z.object({
   initialValue: z.string().optional(),
 });
 
-export const patchBlockItemSchema = z.object({
-  id: z.string().optional(),
-  parentId: z.string().optional().nullable(),
-  granularity: planningGranularityEnum.optional(),
-  startAt: z.string().optional().nullable(),
-  endAt: z.string().optional().nullable(),
-  order: z.number().int().optional(),
-  metodologia: z.string().optional(),
-  bnccCodes: z.array(z.string()).optional(),
-  metadataValues: z.array(patchMetadataValueSchema).optional(),
-  evaluations: z.array(patchEvaluationItemSchema).optional(),
-});
-
-// 0. Setup Inicial ou Atualização de Dados Definitivos
-export const upsertPlanningPatchSchema = z.object({
-  operation: z.literal('UPSERT_PLANNING'),
-  data: z.object({
+export const patchBlockItemSchema = z
+  .object({
+    id: z.string().optional(),
+    parentId: z.string().optional().nullable(),
     granularity: planningGranularityEnum.optional(),
-    schoolId: z.string().optional(),
-    schoolName: z.string().optional(),
-    applicationYearId: z.string().optional(),
-    applicationYearName: z.string().optional(),
-    curricularComponentNames: z.array(z.string()).optional(),
     startAt: z.string().optional().nullable(),
     endAt: z.string().optional().nullable(),
+    order: z.number().int().optional(),
+    metodologia: z.string().optional(),
     bnccCodes: z.array(z.string()).optional(),
-    specifications: z.array(addSpecificationPatchDataSchema).optional(),
     metadataValues: z.array(patchMetadataValueSchema).optional(),
-    blocks: z.array(patchBlockItemSchema).optional(),
     evaluations: z.array(patchEvaluationItemSchema).optional(),
-  }),
-});
+  })
+  .refine(
+    (b) => {
+      if (b.startAt && b.endAt) {
+        return new Date(b.endAt).getTime() >= new Date(b.startAt).getTime();
+      }
+      return true;
+    },
+    {
+      message: 'endAt do bloco não pode ser anterior a startAt',
+      path: ['endAt'],
+    },
+  );
+
+// 0. Setup Inicial ou Atualização de Dados Definitivos
+export const upsertPlanningPatchSchema = z
+  .object({
+    operation: z.literal('UPSERT_PLANNING'),
+    data: z.object({
+      granularity: planningGranularityEnum.optional(),
+      schoolId: z.string().optional(),
+      schoolName: z.string().optional(),
+      applicationYearId: z.string().optional(),
+      applicationYearName: z.string().optional(),
+      curricularComponentNames: z.array(z.string()).optional(),
+      startAt: z.string().optional().nullable(),
+      endAt: z.string().optional().nullable(),
+      recessDates: z.array(z.string()).optional(),
+      bnccCodes: z.array(z.string()).optional(),
+      specifications: z.array(addSpecificationPatchDataSchema).optional(),
+      metadataValues: z.array(patchMetadataValueSchema).optional(),
+      blocks: z.array(patchBlockItemSchema).optional(),
+      evaluations: z.array(patchEvaluationItemSchema).optional(),
+    }),
+  })
+  .superRefine((val, ctx) => {
+    const { data } = val;
+    if (data.startAt && data.endAt) {
+      if (new Date(data.endAt).getTime() < new Date(data.startAt).getTime()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'endAt não pode ser anterior a startAt no planejamento',
+          path: ['data', 'endAt'],
+        });
+      }
+    }
+
+    if (data.blocks) {
+      for (let i = 0; i < data.blocks.length; i++) {
+        const b = data.blocks[i];
+        if (data.granularity === 'WEEKLY' && !b.parentId && b.granularity === 'WEEKLY') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Blocos sob planejamento semanal não podem ter granularidade WEEKLY (devem ser DAILY)',
+            path: ['data', 'blocks', i, 'granularity'],
+          });
+        }
+      }
+    }
+  });
 
 // 1. Troca Pontual de Bloco por Data
 export const updateBlockByDatePatchSchema = z.object({
@@ -156,6 +196,17 @@ export const readOnlyPatchSchema = z.object({
     .optional(),
 });
 
+// 9. Realocação Automática de Aulas por Recessos e Feriados
+export const reallocateLessonsPatchSchema = z.object({
+  operation: z.literal('REALLOCATE_LESSONS'),
+  data: z
+    .object({
+      recessDates: z.array(z.string()).optional(),
+      startDate: z.string().optional(),
+    })
+    .optional(),
+});
+
 // Operação Única Discriminada
 export const singlePatchOperationSchema = z.discriminatedUnion('operation', [
   upsertPlanningPatchSchema,
@@ -167,6 +218,7 @@ export const singlePatchOperationSchema = z.discriminatedUnion('operation', [
   reorganizeTreePatchSchema,
   resetPlanningPatchSchema,
   readOnlyPatchSchema,
+  reallocateLessonsPatchSchema,
 ]);
 
 // Payload do Patch: Pode ser uma única operação ou uma lista de operações sequenciais

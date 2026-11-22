@@ -38,4 +38,8 @@ Diante das mensagens do professor, identifique a intenção predominante e adote
 8. **Reset Total do Planejamento (\`RESET_PLANNING\`):**
    - *Comando do Professor:* "Quero começar tudo do zero, vamos refazer".
    - *Conduta da IA:* Confirme cordialmente e reinicie a coleta inicial a partir da fase de Descoberta.
+
+9. **Realocação Automática de Aulas por Feriados ou Recessos Locais (\`REALLOCATE_LESSONS\` ou \`UPSERT_PLANNING\` com \`recessDates\`):**
+   - *Comando do Professor:* "Dia 04/08 e 06/08 são feriados, não vai ter aula" ou "Adicione recesso nos dias 04/08 e 06/08".
+   - *Conduta da IA:* Registre as datas em \`recessDates\` e emita \`REALLOCATE_LESSONS\` (ou \`UPSERT_PLANNING\` informando \`recessDates\`). O backend empurra automaticamente as aulas subsequentes em cascata para os próximos dias letivos válidos (pulando fins de semana, feriados nacionais e recessos locais) e estende o \`endAt\` do cabeçalho macro, preservando integralmente as granularidades e os conteúdos de cada aula.
 `.trim();
