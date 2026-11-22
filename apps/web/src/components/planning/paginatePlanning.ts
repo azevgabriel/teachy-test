@@ -307,7 +307,7 @@ function collectHierarchicalSections(
 ): HierarchicalSection[] {
 	const sections: HierarchicalSection[] = [];
 
-	function processNode(node: BlockTreeNode) {
+	function processNode(node: BlockTreeNode, nodeIndex: number = 0) {
 		const leafChildren: PlanningBlockWithRelations[] = [];
 		const branchChildren: BlockTreeNode[] = [];
 
@@ -322,11 +322,11 @@ function collectHierarchicalSections(
 		if (leafChildren.length > 0) {
 			const title = formatBlockUnit(
 				node.block,
-				node.block.order ?? 0,
+				nodeIndex,
 				orderSpec?.customLabel,
 			);
-			const breadcrumbs = node.ancestorPath.map((anc) =>
-				formatBlockUnit(anc, anc.order ?? 0, orderSpec?.customLabel),
+			const breadcrumbs = node.ancestorPath.map((anc, ancIdx) =>
+				formatBlockUnit(anc, ancIdx, orderSpec?.customLabel),
 			);
 			const dateRange = formatBlockDateRange(
 				node.block.startAt,
@@ -343,16 +343,17 @@ function collectHierarchicalSections(
 			});
 		}
 
-		for (const branch of branchChildren) {
-			processNode(branch);
+		for (let branchIdx = 0; branchIdx < branchChildren.length; branchIdx++) {
+			processNode(branchChildren[branchIdx], branchIdx);
 		}
 	}
 
-	for (const root of roots) {
+	for (let rootIdx = 0; rootIdx < roots.length; rootIdx++) {
+		const root = roots[rootIdx];
 		if (root.children.length === 0) {
 			const title = formatBlockUnit(
 				root.block,
-				root.block.order ?? 0,
+				rootIdx,
 				orderSpec?.customLabel,
 			);
 			const dateRange = formatBlockDateRange(
@@ -368,7 +369,7 @@ function collectHierarchicalSections(
 				blocks: [root.block],
 			});
 		} else {
-			processNode(root);
+			processNode(root, rootIdx);
 		}
 	}
 

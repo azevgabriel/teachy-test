@@ -176,6 +176,7 @@ export const reorganizeTreePatchSchema = z.object({
   data: z.object({
     parentGranularity: planningGranularityEnum,
     childGranularity: planningGranularityEnum,
+    mode: z.enum(['GROUP', 'SUBDIVIDE']).optional(),
   }),
 });
 

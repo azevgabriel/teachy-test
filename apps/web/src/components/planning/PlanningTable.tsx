@@ -38,13 +38,11 @@ export function formatBlockDateRange(
  */
 export function formatBlockUnit(
 	block: PlanningBlockWithRelations,
-	fallbackIndex: number = 0,
+	index: number = 0,
 	customUnitName?: string | null,
 ): string {
-	const num =
-		block.order !== undefined && block.order !== null
-			? block.order + 1
-			: fallbackIndex + 1;
+	// Utiliza o índice do array de renderização (1-based: index + 1)
+	const num = index + 1;
 
 	// Se o usuário personalizou explicitamente a coluna de ordem (ex: "Vivência", "Encontro", "Semana")
 	if (customUnitName?.trim()) {
