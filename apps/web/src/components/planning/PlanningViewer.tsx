@@ -8,6 +8,8 @@ import {
 	RectangleVertical,
 	RefreshCw,
 	Sparkles,
+	ZoomIn,
+	ZoomOut,
 } from "lucide-react";
 import * as React from "react";
 import { Button } from "#/components/ui/button";
@@ -37,14 +39,60 @@ export function PlanningViewer({
 	onToggle,
 	onRefresh,
 }: PlanningViewerProps) {
+	const containerRef = React.useRef<HTMLDivElement>(null);
+	const [containerWidth, setContainerWidth] = React.useState<number>(0);
 	const [isExporting, setIsExporting] = React.useState(false);
 	const [orientation, setOrientation] =
 		React.useState<PageOrientation>("portrait");
+	const [zoomMode, setZoomMode] = React.useState<"fit" | "100">("fit");
+	const [manualZoom, setManualZoom] = React.useState<number | null>(null);
+
 	const planning = data?.planning ?? null;
 	const specifications = data?.specifications || [];
 	const hasBlocks = (planning?.blocks?.length ?? 0) > 0;
 
-	// Diagrama o planejamento em folhas A4 discretas com base na orientação (Retrato ou Paisagem)
+	// Monitora ativamente o redimensionamento do painel e do navegador via ResizeObserver
+	React.useEffect(() => {
+		const el = containerRef.current;
+		if (!el) return;
+
+		const updateDimensions = () => {
+			if (el) {
+				setContainerWidth(el.clientWidth);
+			}
+		};
+
+		updateDimensions();
+		const resizeObserver = new ResizeObserver(updateDimensions);
+		resizeObserver.observe(el);
+		window.addEventListener("resize", updateDimensions);
+
+		return () => {
+			resizeObserver.disconnect();
+			window.removeEventListener("resize", updateDimensions);
+		};
+	}, []);
+
+	// Dimensões base físicas A4 em pixels (96 DPI)
+	const baseWidth = orientation === "landscape" ? 1123 : 794;
+	const baseHeight = orientation === "landscape" ? 794 : 1123;
+
+	// Fator de escala dinâmico (auto-fit responsivo ao expandir ou diminuir o navegador)
+	const effectiveScale = React.useMemo(() => {
+		if (manualZoom !== null) {
+			return manualZoom;
+		}
+		if (zoomMode === "100") {
+			return 1;
+		}
+		if (!containerWidth) return 1;
+		const horizontalPadding = 48; // Padding visual do canvas
+		const availableWidth = Math.max(260, containerWidth - horizontalPadding);
+		// Escala proporcionalmente para caber 100% dentro do painel
+		return Math.min(1.0, Math.max(0.3, availableWidth / baseWidth));
+	}, [manualZoom, zoomMode, containerWidth, baseWidth]);
+
+	// Diagrama o planejamento em folhas A4 discretas com base na orientação
 	const pages = React.useMemo(() => {
 		return paginatePlanning(planning, specifications, orientation);
 	}, [planning, specifications, orientation]);
@@ -59,12 +107,10 @@ export function PlanningViewer({
 			const res = await fetch(url);
 
 			if (!res.ok) {
-				// Fallback: abre amigavelmente
 				window.open(url, "_blank");
 				return;
 			}
 
-			// Se recebeu o stream binário de volta, inicia o download
 			const blob = await res.blob();
 			const blobUrl = window.URL.createObjectURL(blob);
 			const link = document.createElement("a");
@@ -118,18 +164,28 @@ export function PlanningViewer({
 
 	return (
 		<aside className="flex flex-col flex-1 min-w-0 h-full border-r border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-950/80 overflow-hidden">
-			{/* Estilos dinâmicos de impressão para garantir A4 portrait ou landscape */}
+			{/* Estilos dinâmicos de impressão */}
 			<style>{`
 				@media print {
 					@page {
 						size: A4 ${orientation};
 						margin: 10mm;
 					}
+					.a4-sheet-wrapper {
+						width: auto !important;
+						height: auto !important;
+						transform: none !important;
+					}
+					.a4-sheet {
+						transform: none !important;
+						width: ${baseWidth}px !important;
+						min-height: ${baseHeight}px !important;
+					}
 				}
 			`}</style>
 
 			{/* Top Bar da Pré-visualização A4 */}
-			<header className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-xs">
+			<header className="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-xs gap-2 flex-wrap">
 				<div className="flex items-center gap-2">
 					<Button
 						variant="ghost"
@@ -152,19 +208,22 @@ export function PlanningViewer({
 							<p className="text-[10px] text-slate-400 font-medium">
 								{isLoading
 									? "Sincronizando..."
-									: `${pages.length} folha${pages.length > 1 ? "s" : ""} (${orientation === "landscape" ? "Paisagem" : "Retrato"})`}
+									: `${pages.length} folha${pages.length > 1 ? "s" : ""} • ${orientation === "landscape" ? "Paisagem" : "Retrato"}`}
 							</p>
 						</div>
 					</div>
 				</div>
 
-				{/* Controles de Orientação e Ações */}
-				<div className="flex items-center gap-2">
+				{/* Controles de Orientação, Zoom Responsivo e Ações */}
+				<div className="flex items-center gap-1.5 flex-wrap">
 					{/* Toggle Retrato / Paisagem */}
 					<div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded border border-slate-200 dark:border-slate-700">
 						<button
 							type="button"
-							onClick={() => setOrientation("portrait")}
+							onClick={() => {
+								setOrientation("portrait");
+								setManualZoom(null);
+							}}
 							title="Orientação Retrato (A4: 210mm × 297mm)"
 							className={cn(
 								"flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors cursor-pointer",
@@ -178,7 +237,10 @@ export function PlanningViewer({
 						</button>
 						<button
 							type="button"
-							onClick={() => setOrientation("landscape")}
+							onClick={() => {
+								setOrientation("landscape");
+								setManualZoom(null);
+							}}
 							title="Orientação Paisagem (A4: 297mm × 210mm)"
 							className={cn(
 								"flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded transition-colors cursor-pointer",
@@ -189,6 +251,56 @@ export function PlanningViewer({
 						>
 							<RectangleHorizontal className="h-3.5 w-3.5" />
 							<span className="hidden sm:inline">Paisagem</span>
+						</button>
+					</div>
+
+					{/* Controles de Zoom Responsivo */}
+					<div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded border border-slate-200 dark:border-slate-700">
+						<button
+							type="button"
+							onClick={() => {
+								setManualZoom((prev) =>
+									Math.max(0.3, (prev ?? effectiveScale) - 0.1),
+								);
+							}}
+							title="Diminuir Zoom"
+							className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+						>
+							<ZoomOut className="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							onClick={() => {
+								if (zoomMode === "fit") {
+									setZoomMode("100");
+									setManualZoom(1);
+								} else {
+									setZoomMode("fit");
+									setManualZoom(null);
+								}
+							}}
+							title={
+								zoomMode === "fit"
+									? "Ajustado à largura do painel (clique para 100%)"
+									: "Zoom 100% (clique para ajustar à largura)"
+							}
+							className="px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 hover:text-slate-950 cursor-pointer"
+						>
+							{zoomMode === "fit" && manualZoom === null
+								? "Ajustar"
+								: `${Math.round(effectiveScale * 100)}%`}
+						</button>
+						<button
+							type="button"
+							onClick={() => {
+								setManualZoom((prev) =>
+									Math.min(1.4, (prev ?? effectiveScale) + 0.1),
+								);
+							}}
+							title="Aumentar Zoom"
+							className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+						>
+							<ZoomIn className="h-3 w-3" />
 						</button>
 					</div>
 
@@ -228,146 +340,213 @@ export function PlanningViewer({
 				</div>
 			)}
 
-			{/* Canvas com as Folhas A4 discretas (Scroll horizontal e vertical fluido) */}
-			<div className="flex-1 overflow-auto p-4 sm:p-8 flex flex-col items-center gap-8">
+			{/* Canvas com as Folhas A4 discretas (Scroll fluido e auto-scaling) */}
+			<div
+				ref={containerRef}
+				className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center gap-6"
+			>
 				{isLoading && !planning ? (
 					// Skeleton no formato de Folha A4
 					<div
-						className={cn(
-							"bg-white shadow-md border border-slate-300 rounded-xs flex flex-col gap-6 shrink-0",
-							orientation === "portrait"
-								? "w-[210mm] max-w-full min-h-[297mm] p-8 sm:p-10"
-								: "w-[297mm] min-h-[210mm] p-6 sm:p-8",
-						)}
+						className="a4-sheet-wrapper flex justify-center shrink-0"
+						style={{
+							width:
+								effectiveScale < 1
+									? `${Math.round(baseWidth * effectiveScale)}px`
+									: `${baseWidth}px`,
+							height:
+								effectiveScale < 1
+									? `${Math.round(baseHeight * effectiveScale)}px`
+									: `${baseHeight}px`,
+						}}
 					>
-						<div className="border-b-2 border-slate-200 pb-4 flex justify-between items-center">
-							<Skeleton className="h-6 w-48" />
-							<Skeleton className="h-6 w-20" />
-						</div>
-						<div className="grid grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xs border border-slate-200">
-							<Skeleton className="h-8 w-full" />
-							<Skeleton className="h-8 w-full" />
-							<Skeleton className="h-8 w-full" />
-							<Skeleton className="h-8 w-full" />
-						</div>
-						<div className="flex flex-col gap-2 mt-4">
-							<Skeleton className="h-8 w-full" />
-							<Skeleton className="h-12 w-full" />
-							<Skeleton className="h-12 w-full" />
-							<Skeleton className="h-12 w-full" />
+						<div
+							className={cn(
+								"bg-white shadow-md border border-slate-300 rounded-xs flex flex-col gap-6 shrink-0 origin-top",
+								orientation === "portrait"
+									? "w-[210mm] min-h-[297mm] p-8 sm:p-10"
+									: "w-[297mm] min-h-[210mm] p-6 sm:p-8",
+							)}
+							style={{
+								width: `${baseWidth}px`,
+								minHeight: `${baseHeight}px`,
+								transform:
+									effectiveScale < 1 ? `scale(${effectiveScale})` : undefined,
+								transformOrigin: "top center",
+							}}
+						>
+							<div className="border-b-2 border-slate-200 pb-4 flex justify-between items-center">
+								<Skeleton className="h-6 w-48" />
+								<Skeleton className="h-6 w-20" />
+							</div>
+							<div className="grid grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xs border border-slate-200">
+								<Skeleton className="h-8 w-full" />
+								<Skeleton className="h-8 w-full" />
+								<Skeleton className="h-8 w-full" />
+								<Skeleton className="h-8 w-full" />
+							</div>
+							<div className="flex flex-col gap-2 mt-4">
+								<Skeleton className="h-8 w-full" />
+								<Skeleton className="h-12 w-full" />
+								<Skeleton className="h-12 w-full" />
+								<Skeleton className="h-12 w-full" />
+							</div>
 						</div>
 					</div>
 				) : !planning ? (
 					// Estado Vazio (Folha A4 em Branco pronta para receber o plano)
 					<div
-						className={cn(
-							"bg-white text-slate-900 shadow-md border border-slate-300 rounded-xs flex flex-col items-center justify-center text-center shrink-0",
-							orientation === "portrait"
-								? "w-[210mm] max-w-full min-h-[297mm] p-8 sm:p-10"
-								: "w-[297mm] min-h-[210mm] p-6 sm:p-8",
-						)}
+						className="a4-sheet-wrapper flex justify-center shrink-0"
+						style={{
+							width:
+								effectiveScale < 1
+									? `${Math.round(baseWidth * effectiveScale)}px`
+									: `${baseWidth}px`,
+							height:
+								effectiveScale < 1
+									? `${Math.round(baseHeight * effectiveScale)}px`
+									: `${baseHeight}px`,
+						}}
 					>
-						<div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center mb-3 border border-slate-200 shadow-xs">
-							<Sparkles className="h-6 w-6 text-emerald-600" />
-						</div>
-						<h4 className="text-base font-extrabold text-slate-950 font-serif mb-1">
-							Folha de Planejamento A4 (
-							{orientation === "landscape" ? "Paisagem" : "Retrato"})
-						</h4>
-						<p className="text-xs text-slate-600 max-w-sm mb-6 leading-relaxed">
-							Inicie a conversa no chat ao lado informando os detalhes da aula
-							ou ciclo. A sua folha A4 será preenchida e diagramada aqui em
-							tempo real.
-						</p>
-
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md w-full text-left">
-							<div className="p-3 rounded bg-slate-50 border border-slate-200 text-xs text-slate-800">
-								<span className="font-bold text-slate-950 block mb-0.5">
-									📐 Layout Pronto para Impressão
-								</span>
-								Diagramação adaptada para exportação em PDF via Playwright.
+						<div
+							className={cn(
+								"bg-white text-slate-900 shadow-md border border-slate-300 rounded-xs flex flex-col items-center justify-center text-center shrink-0 origin-top",
+								orientation === "portrait"
+									? "w-[210mm] min-h-[297mm] p-8 sm:p-10"
+									: "w-[297mm] min-h-[210mm] p-6 sm:p-8",
+							)}
+							style={{
+								width: `${baseWidth}px`,
+								minHeight: `${baseHeight}px`,
+								transform:
+									effectiveScale < 1 ? `scale(${effectiveScale})` : undefined,
+								transformOrigin: "top center",
+							}}
+						>
+							<div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center mb-3 border border-slate-200 shadow-xs">
+								<Sparkles className="h-6 w-6 text-emerald-600" />
 							</div>
-							<div className="p-3 rounded bg-slate-50 border border-slate-200 text-xs text-slate-800">
-								<span className="font-bold text-slate-950 block mb-0.5">
-									📄 Quebra de Página A4
-								</span>
-								Se o conteúdo ultrapassar o tamanho da folha, ele passa para a
-								próxima folha A4.
+							<h4 className="text-base font-extrabold text-slate-950 font-serif mb-1">
+								Folha de Planejamento A4 (
+								{orientation === "landscape" ? "Paisagem" : "Retrato"})
+							</h4>
+							<p className="text-xs text-slate-600 max-w-sm mb-6 leading-relaxed">
+								Inicie a conversa no chat ao lado informando os detalhes da aula
+								ou ciclo. A sua folha A4 será preenchida e diagramada aqui em
+								tempo real.
+							</p>
+
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md w-full text-left">
+								<div className="p-3 rounded bg-slate-50 border border-slate-200 text-xs text-slate-800">
+									<span className="font-bold text-slate-950 block mb-0.5">
+										📐 Layout Pronto para Impressão
+									</span>
+									Diagramação adaptada para exportação em PDF via Playwright.
+								</div>
+								<div className="p-3 rounded bg-slate-50 border border-slate-200 text-xs text-slate-800">
+									<span className="font-bold text-slate-950 block mb-0.5">
+										📄 Quebra de Página A4
+									</span>
+									Se o conteúdo ultrapassar o tamanho da folha, ele passa para a
+									próxima folha A4.
+								</div>
 							</div>
 						</div>
 					</div>
 				) : (
-					// Mapeia cada folha A4 com quebra de página controlada
+					// Mapeia cada folha A4 com quebra de página controlada e escala fluida
 					pages.map((page) => (
 						<div
-							key={`page-${page.pageNumber}`}
-							data-page-number={page.pageNumber}
-							data-orientation={orientation}
-							className={cn(
-								"a4-sheet bg-white text-slate-900 shadow-lg border border-slate-300 rounded-xs flex flex-col justify-between shrink-0 transition-all",
-								orientation === "portrait"
-									? "w-[210mm] max-w-full min-h-[297mm] p-6 sm:p-10"
-									: "w-[297mm] min-h-[210mm] p-5 sm:p-7",
-							)}
+							key={`page-${orientation}-${page.pageNumber}`}
+							className="a4-sheet-wrapper flex justify-center shrink-0"
+							style={{
+								width:
+									effectiveScale < 1
+										? `${Math.round(baseWidth * effectiveScale)}px`
+										: `${baseWidth}px`,
+								height:
+									effectiveScale < 1
+										? `${Math.round(baseHeight * effectiveScale)}px`
+										: `${baseHeight}px`,
+							}}
 						>
-							<div className="flex-1 flex flex-col">
-								{/* Running Header para Folhas > 1 */}
-								{page.pageNumber > 1 && (
-									<div className="flex items-center justify-between pb-2 mb-4 border-b border-slate-200 text-xs text-slate-500 font-medium">
-										<span className="font-semibold text-slate-800">
-											Plano de Ensino &bull;{" "}
-											{planning.curricularComponents?.[0]?.name || "Pedagógico"}
-										</span>
-										<span className="font-mono text-[11px] text-slate-400">
-											Folha {page.pageNumber}
-										</span>
-									</div>
+							<div
+								data-page-number={page.pageNumber}
+								data-orientation={orientation}
+								className={cn(
+									"a4-sheet bg-white text-slate-900 shadow-lg border border-slate-300 rounded-xs flex flex-col justify-between shrink-0 origin-top",
+									orientation === "portrait"
+										? "w-[210mm] min-h-[297mm] p-6 sm:p-10"
+										: "w-[297mm] min-h-[210mm] p-5 sm:p-7",
 								)}
+								style={{
+									width: `${baseWidth}px`,
+									minHeight: `${baseHeight}px`,
+									transform:
+										effectiveScale < 1 ? `scale(${effectiveScale})` : undefined,
+									transformOrigin: "top center",
+								}}
+							>
+								<div className="flex-1 flex flex-col">
+									{/* Running Header para Folhas > 1 */}
+									{page.pageNumber > 1 && (
+										<div className="flex items-center justify-between pb-2 mb-4 border-b border-slate-200 text-xs text-slate-500 font-medium">
+											<span className="font-semibold text-slate-800">
+												Plano de Ensino &bull;{" "}
+												{planning.curricularComponents?.[0]?.name ||
+													"Pedagógico"}
+											</span>
+											<span className="font-mono text-[11px] text-slate-400">
+												Folha {page.pageNumber}
+											</span>
+										</div>
+									)}
 
-								{/* Itens alocados nesta folha */}
-								{page.items.map((item) => {
-									if (item.type === "header") {
-										return (
-											<PlanningHeader
-												key={item.id}
-												planning={planning}
-												specifications={specifications}
-											/>
-										);
-									}
+									{/* Itens alocados nesta folha */}
+									{page.items.map((item) => {
+										if (item.type === "header") {
+											return (
+												<PlanningHeader
+													key={item.id}
+													planning={planning}
+													specifications={specifications}
+												/>
+											);
+										}
 
-									if (item.type === "section-title") {
-										return (
-											<SectionDivider
-												key={item.id}
-												title={item.title || "Bloco"}
-												dateRange={item.dateRange}
-												isContinuation={item.isContinuation}
-											/>
-										);
-									}
+										if (item.type === "section-title") {
+											return (
+												<SectionDivider
+													key={item.id}
+													title={item.title || "Bloco"}
+													dateRange={item.dateRange}
+													isContinuation={item.isContinuation}
+												/>
+											);
+										}
 
-									if (item.type === "table-chunk" && item.blocks) {
-										return (
-											<PlanningTableChunk
-												key={item.id}
-												blocks={item.blocks}
-												specifications={specifications}
-												allBlocks={planning.blocks || []}
-											/>
-										);
-									}
+										if (item.type === "table-chunk" && item.blocks) {
+											return (
+												<PlanningTableChunk
+													key={item.id}
+													blocks={item.blocks}
+													specifications={specifications}
+													allBlocks={planning.blocks || []}
+												/>
+											);
+										}
 
-									return null;
-								})}
-							</div>
+										return null;
+									})}
+								</div>
 
-							{/* Running Footer em cada Folha A4 */}
-							<div className="a4-sheet-footer pt-3 mt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-								<span>Plano Curricular Estruturado &bull; Teachy</span>
-								<span className="font-semibold text-slate-700">
-									Folha {page.pageNumber} de {pages.length}
-								</span>
+								{/* Running Footer em cada Folha A4 */}
+								<div className="a4-sheet-footer pt-3 mt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+									<span>Plano Curricular Estruturado &bull; Teachy</span>
+									<span className="font-semibold text-slate-700">
+										Folha {page.pageNumber} de {pages.length}
+									</span>
+								</div>
 							</div>
 						</div>
 					))
