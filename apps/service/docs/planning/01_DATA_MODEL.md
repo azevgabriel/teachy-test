@@ -94,6 +94,9 @@ classDiagram
         +String customLabel
         +String description
         +Boolean isRequired
+        +Int order
+        +Boolean isVisible
+        +Boolean showLabel
     }
     class PlanningMetadataValue {
         +UUID id
@@ -112,8 +115,12 @@ Defines the contract and definition mold for a field within the active session:
   - `PLANNING`: Macro header metadata.
   - `PLANNING_BLOCK`: Lesson / block metadata.
 - **`isRequired` (`Boolean @default(false)`):** Marks whether this field is mandatory for the school/session. When `true`, triggers mandatory AI slot-filling.
+- **`order` (`Int @default(0)`):** Universal numeric ordering sequence for header elements and table columns.
+- **`isVisible` (`Boolean @default(true)`):** Controls visibility and omission of sections or columns without deleting underlying data.
+- **`showLabel` (`Boolean @default(true)`):** Controls whether the top field label is rendered or omitted (rendering direct value only).
 - **Dual Semantics of `colName`:**
-  1. *Native Column Override:* When `colName` matches a fixed native column (e.g. `metodologia`), the specification only changes the display label (`customLabel = "Sequência Didática"`). **Generates 0 rows in `PlanningMetadataValue`**, persisting data directly into the physical column.
+  1. *Native Column Override (Anti-Duplication Invariant):* When `colName` matches a fixed native column or relation (e.g. `metodologia`, `curricularComponents`, `evaluations`, `learningObjectives`), the specification acts strictly as a presentation mold (`customLabel`, `order`, `isVisible`, `showLabel`). **Generates 0 rows in `PlanningMetadataValue`**, persisting data directly into the physical column or relation.
+     - *Anti-Duplication Rule:* If the teacher asks to rename "Componente" to "Disciplina" and change the subject to "Português", the system updates `Planning.curricularComponents` directly (via `curricularComponentNames: ["Língua Portuguesa"]`) and updates the specification with `colName: "curricularComponents"`, `customLabel: "Disciplina"`. It **never creates an ad-hoc EAV specification `colName: "disciplina"` with separate `PlanningMetadataValue` rows**, which would create duplicate cards on the UI.
   2. *Custom Dynamic Field:* When `colName` does not exist on the fixed table (e.g. `recursos_didaticos`, `aplicacao_crista`), the specification generates **1 or more rows in `PlanningMetadataValue`**.
 - **`description`:** Pedagogical instructions on how the field should be authored (fed directly into AI system prompts).
 
@@ -156,6 +163,18 @@ CHECK (
 ```
 
 Persistence use cases and AI patch handlers must always populate exactly one of the foreign keys (`planning_id` or `planning_block_id`), never both and never neither.
+
+### Macro BNCC Isolation via XOR (`bnccCodes: []`)
+Because `learning_objectives` enforces the XOR constraint between `planning_id` and `planning_block_id`, macro cycle objectives and micro lesson objectives are strictly partitioned at the database level:
+- When a plan reaches daily granularity, duplicating all aggregated BNCC skills in the macro header causes visual clutter.
+- Explicitly passing `bnccCodes: []` in `UPSERT_PLANNING` triggers an atomic deletion scoped strictly to the macro header:
+  ```typescript
+  await prisma.learningObjective.deleteMany({
+    where: { planningId: planning.id },
+  });
+  ```
+- Daily lesson skills (`planning_block_id IS NOT NULL`) remain 100% untouched.
+- Alternatively, visual omission without deleting database records can be achieved by updating the specification with `isVisible: false`.
 
 ---
 

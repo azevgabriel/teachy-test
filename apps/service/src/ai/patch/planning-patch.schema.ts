@@ -35,6 +35,9 @@ export const addSpecificationPatchDataSchema = z.object({
   tableRef: specificationTableRefEnum,
   description: z.string().optional(),
   isRequired: z.boolean().default(false),
+  order: z.number().int().default(0),
+  isVisible: z.boolean().default(true),
+  showLabel: z.boolean().default(true),
   initialValue: z.string().optional(),
 });
 
