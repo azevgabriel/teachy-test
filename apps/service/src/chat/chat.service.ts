@@ -191,23 +191,63 @@ export class ChatService {
     });
   }
 
-  async listSessions(): Promise<(Session & { _count: { conversations: number } })[]> {
-    return this.prisma.session.findMany({
+  async listSessions(): Promise<any[]> {
+    const sessions = await this.prisma.session.findMany({
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: {
           select: { conversations: true },
         },
+        plannings: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            granularity: true,
+            startAt: true,
+            endAt: true,
+            applicationYear: {
+              select: { id: true, name: true, stage: true },
+            },
+            curricularComponents: {
+              select: { id: true, name: true },
+            },
+          },
+        },
       },
+    });
+
+    return sessions.map((session: any) => {
+      const { plannings, ...rest } = session;
+      return {
+        ...rest,
+        planning: plannings?.[0] ?? null,
+      };
     });
   }
 
-  async getSession(id: string): Promise<Session & { conversations: Conversation[] }> {
+  async getSession(id: string): Promise<any> {
     const session = await this.prisma.session.findUnique({
       where: { id },
       include: {
         conversations: {
           orderBy: { createdAt: 'asc' },
+        },
+        plannings: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            granularity: true,
+            startAt: true,
+            endAt: true,
+            applicationYear: {
+              select: { id: true, name: true, stage: true },
+            },
+            curricularComponents: {
+              select: { id: true, name: true },
+            },
+          },
         },
       },
     });
@@ -216,7 +256,11 @@ export class ChatService {
       throw new NotFoundException(`Sessão com ID ${id} não encontrada.`);
     }
 
-    return session;
+    const { plannings, ...rest } = session as any;
+    return {
+      ...rest,
+      planning: plannings?.[0] ?? null,
+    };
   }
 
   async renameSession(id: string, name: string): Promise<Session> {
@@ -280,16 +324,7 @@ export class ChatService {
       },
     });
 
-    // 2. Se a sessão tem o nome padrão, atualiza com base na primeira mensagem
-    if (session.name === 'Nova Conversa' && session.conversations.length === 0) {
-      const summaryName = userText.length > 30 ? `${userText.slice(0, 30)}...` : userText;
-      await this.prisma.session.update({
-        where: { id: sessionId },
-        data: { name: summaryName },
-      });
-    }
-
-    // 3. Criar a mensagem da IA antecipadamente para obter o ID da mensagem
+    // 2. Criar a mensagem da IA antecipadamente para obter o ID da mensagem
     const aiMessage = await this.prisma.conversation.create({
       data: {
         sessionId,

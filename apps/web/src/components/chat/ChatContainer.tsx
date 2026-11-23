@@ -1,8 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
-import { PanelRight, Sparkles } from "lucide-react";
+import { Calendar, PanelRight, Sparkles } from "lucide-react";
 import * as React from "react";
+import { formatGranularity } from "#/components/planning/PlanningHeader";
 import { PlanningViewer } from "#/components/planning/PlanningViewer";
 import { usePlanningSync } from "#/components/planning/usePlanningSync";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { cn } from "#/lib/utils";
 import { ChatInput } from "./ChatInput";
@@ -10,6 +12,38 @@ import { ChatTimeline } from "./ChatTimeline";
 import { Sidebar } from "./Sidebar";
 import type { Message, SessionSummary } from "./types";
 import { useChatStream } from "./useChatStream";
+
+function formatPlanningDateRange(
+	startAt?: string | null,
+	endAt?: string | null,
+): string {
+	if (!startAt && !endAt) return "";
+	try {
+		const formatSingle = (str: string) => {
+			const safeStr = str.includes("T") ? str : `${str}T12:00:00Z`;
+			const d = new Date(safeStr);
+			return d.toLocaleDateString("pt-BR", {
+				day: "2-digit",
+				month: "2-digit",
+				year: "numeric",
+				timeZone: "UTC",
+			});
+		};
+
+		if (startAt && endAt) {
+			return `${formatSingle(startAt)} a ${formatSingle(endAt)}`;
+		}
+		if (startAt) {
+			return `A partir de ${formatSingle(startAt)}`;
+		}
+		if (endAt) {
+			return `Até ${formatSingle(endAt)}`;
+		}
+	} catch {
+		return "";
+	}
+	return "";
+}
 
 interface ChatContainerProps {
 	sessionId?: string;
@@ -56,13 +90,19 @@ export function ChatContainer({
 		try {
 			const res = await fetch("/api/sessions");
 			if (res.ok) {
-				const data = await res.json();
+				const data: SessionSummary[] = await res.json();
 				setSessions(data);
+				if (activeSessionId) {
+					const current = data.find((s) => s.id === activeSessionId);
+					if (current?.name) {
+						setActiveSessionTitle(current.name);
+					}
+				}
 			}
 		} catch (err) {
 			console.error("Erro ao carregar sessões:", err);
 		}
-	}, []);
+	}, [activeSessionId]);
 
 	React.useEffect(() => {
 		fetchSessions();
@@ -117,7 +157,7 @@ export function ChatContainer({
 				const createRes = await fetch("/api/sessions", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name: text.slice(0, 30) }),
+					body: JSON.stringify({ name: "Nova Conversa" }),
 				});
 
 				if (!createRes.ok) {
@@ -138,7 +178,7 @@ export function ChatContainer({
 		}
 
 		if (!activeSessionTitle) {
-			setActiveSessionTitle(text.slice(0, 30));
+			setActiveSessionTitle("Nova Conversa");
 		}
 		sendMessage(activeSessionId ?? null, text);
 	};
@@ -195,6 +235,20 @@ export function ChatContainer({
 		[activeSessionId, fetchSessions, navigate],
 	);
 
+	const activePlanning = planningData?.planning;
+	const hasActivePlanning = Boolean(
+		activePlanning &&
+			((activePlanning.curricularComponents &&
+				activePlanning.curricularComponents.length > 0) ||
+				activePlanning.applicationYear ||
+				activePlanning.granularity),
+	);
+
+	const activeDateRange = formatPlanningDateRange(
+		activePlanning?.startAt,
+		activePlanning?.endAt,
+	);
+
 	return (
 		<div className="flex h-screen w-full overflow-hidden bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 			{/* Área Esquerda: Pré-visualização do Planejamento no Formato A4 */}
@@ -219,19 +273,62 @@ export function ChatContainer({
 			>
 				{/* Top Bar do Chat */}
 				<header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xs shrink-0">
-					<div className="flex items-center gap-2 truncate">
+					<div className="flex items-center gap-2.5 truncate">
 						<div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
 							T
 						</div>
-						<div className="truncate">
+						<div className="flex flex-col min-w-0">
 							<h1 className="text-sm font-semibold truncate">
 								{activeSessionTitle || "Nova Conversa com IA"}
 							</h1>
-							<p className="text-[11px] text-slate-400">
-								{activeSessionId
-									? "Janela de contexto ativa"
-									: "Inicie uma nova sessão"}
-							</p>
+							{hasActivePlanning ? (
+								<div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+									{activePlanning?.curricularComponents?.map((comp) => (
+										<Badge
+											key={comp.id}
+											variant="default"
+											title={comp.name}
+											className="text-[10px] h-4.5 px-1.5 py-0 font-medium max-w-[130px] min-w-0"
+										>
+											<span className="truncate">{comp.name}</span>
+										</Badge>
+									))}
+									{activePlanning?.applicationYear && (
+										<Badge
+											variant="outline"
+											title={activePlanning.applicationYear.name}
+											className="text-[10px] h-4.5 px-1.5 py-0 font-medium text-slate-700 dark:text-slate-300 max-w-[130px] min-w-0"
+										>
+											<span className="truncate">
+												{activePlanning.applicationYear.name}
+											</span>
+										</Badge>
+									)}
+									{activePlanning?.granularity && (
+										<Badge
+											variant="secondary"
+											title={formatGranularity(activePlanning.granularity)}
+											className="text-[10px] h-4.5 px-1.5 py-0 font-medium max-w-[130px] min-w-0"
+										>
+											<span className="truncate">
+												{formatGranularity(activePlanning.granularity)}
+											</span>
+										</Badge>
+									)}
+									{activeDateRange && (
+										<div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+											<Calendar className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+											<span>{activeDateRange}</span>
+										</div>
+									)}
+								</div>
+							) : (
+								<p className="text-[11px] text-slate-400">
+									{activeSessionId
+										? "Janela de contexto ativa • Em definição"
+										: "Inicie uma nova sessão"}
+								</p>
+							)}
 						</div>
 					</div>
 

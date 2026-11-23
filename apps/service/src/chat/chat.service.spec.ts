@@ -80,18 +80,57 @@ describe('ChatService', () => {
   });
 
   describe('listSessions', () => {
-    it('returns sessions ordered by updatedAt descending', async () => {
+    it('returns sessions ordered by updatedAt descending with planning metadata', async () => {
       const mockList = [
-        { id: '1', name: 'Sessão 1', _count: { conversations: 2 } },
+        {
+          id: '1',
+          name: 'Sessão 1',
+          _count: { conversations: 2 },
+          plannings: [
+            {
+              id: 'plan-1',
+              granularity: 'WEEKLY',
+              startAt: new Date('2026-08-03'),
+              endAt: new Date('2026-08-07'),
+              applicationYear: { id: 'y1', name: '3º Ano', stage: 'FUNDAMENTAL_1' },
+              curricularComponents: [{ id: 'c1', name: 'Língua Portuguesa' }],
+            },
+          ],
+        },
       ];
       prismaMock.session.findMany.mockResolvedValue(mockList);
 
       const result = await chatService.listSessions();
       expect(prismaMock.session.findMany).toHaveBeenCalledWith({
         orderBy: { updatedAt: 'desc' },
-        include: { _count: { select: { conversations: true } } },
+        include: {
+          _count: { select: { conversations: true } },
+          plannings: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              granularity: true,
+              startAt: true,
+              endAt: true,
+              applicationYear: {
+                select: { id: true, name: true, stage: true },
+              },
+              curricularComponents: {
+                select: { id: true, name: true },
+              },
+            },
+          },
+        },
       });
-      expect(result).toEqual(mockList);
+      expect(result).toEqual([
+        {
+          id: '1',
+          name: 'Sessão 1',
+          _count: { conversations: 2 },
+          planning: mockList[0].plannings[0],
+        },
+      ]);
     });
   });
 
@@ -104,20 +143,53 @@ describe('ChatService', () => {
       );
     });
 
-    it('returns session with conversations ordered by createdAt ascending', async () => {
+    it('returns session with conversations ordered by createdAt ascending and planning metadata', async () => {
       const mockSession = {
         id: 'session-1',
         name: 'Conversa',
         conversations: [{ id: 'c1', text: 'Olá', type: 'USER' }],
+        plannings: [
+          {
+            id: 'plan-1',
+            granularity: 'WEEKLY',
+            startAt: new Date('2026-08-03'),
+            endAt: new Date('2026-08-07'),
+            applicationYear: { id: 'y1', name: '3º Ano', stage: 'FUNDAMENTAL_1' },
+            curricularComponents: [{ id: 'c1', name: 'Língua Portuguesa' }],
+          },
+        ],
       };
       prismaMock.session.findUnique.mockResolvedValue(mockSession);
 
       const result = await chatService.getSession('session-1');
       expect(prismaMock.session.findUnique).toHaveBeenCalledWith({
         where: { id: 'session-1' },
-        include: { conversations: { orderBy: { createdAt: 'asc' } } },
+        include: {
+          conversations: { orderBy: { createdAt: 'asc' } },
+          plannings: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              granularity: true,
+              startAt: true,
+              endAt: true,
+              applicationYear: {
+                select: { id: true, name: true, stage: true },
+              },
+              curricularComponents: {
+                select: { id: true, name: true },
+              },
+            },
+          },
+        },
       });
-      expect(result).toEqual(mockSession);
+      expect(result).toEqual({
+        id: 'session-1',
+        name: 'Conversa',
+        conversations: [{ id: 'c1', text: 'Olá', type: 'USER' }],
+        planning: mockSession.plannings[0],
+      });
     });
   });
 

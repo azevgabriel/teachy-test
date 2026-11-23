@@ -277,6 +277,67 @@ Acesse a aplicação no navegador em: **`http://localhost:5173`**.
 
 ---
 
+## 🔮 Roadmap & Próximos Passos (Melhorias Futuras)
+
+Abaixo estão registradas as melhorias arquiteturais, fluxos de automação e medidas de segurança planejadas para elevar a maturidade, robustez e flexibilidade do sistema:
+
+### 1. 🛡️ Sanitização de Texto & Segurança contra Script Injection (XSS)
+
+> [!CAUTION]
+> **Vulnerabilidade Crítica Mapeada:** No fluxo de exportação para PDF, a aplicação web (`apps/web`) clona e serializa o nó do DOM React do _Living Draft_ contendo os dados inseridos pelo usuário e gerados pela IA, despachando o HTML bruto para compilação headless no microsserviço (`apps/engine` via Playwright Chromium). A ausência de um sanitizador robusto expõe o ambiente headless a injeções de scripts (`<script>`, handlers de eventos, template injection), configurando uma das falhas mais severas do sistema.
+
+- **Mitigações planejadas:**
+  - **Sanitização Bidirecional:** Incorporação de sanitizador de HTML rigoroso (ex.: `DOMPurify` / `sanitize-html`) antes do despacho do clone React e validação defensiva de entrada no microsserviço.
+  - **Content Security Policy (CSP):** Imposição de diretivas restritivas no navegador headless do Playwright, desabilitando execução de scripts e requisições de rede externas durante a renderização.
+  - **Filtros de Entrada:** Sanitização de inputs de texto livre no backend para prevenir persistência de payloads maliciosos no banco de dados.
+
+---
+
+### 2. ⚡ Automação por CI/CD & 4 Portões de Validação por PR
+
+Implementação de pipelines automatizadas via **GitHub Actions** cobrindo os **três serviços do monorepo** (`client` em `apps/web`, `server` em `apps/service` e `microservice` em `apps/engine`):
+
+| Portão de Validação | Client (`apps/web`) | Server (`apps/service`) | Microservice (`apps/engine`) |
+| :--- | :--- | :--- | :--- |
+| **1. Linters & Estilo** | Biome / ESLint | ESLint + Prettier | Ruff / Flake8 / Black |
+| **2. Testes Unitários & Coverage** | Vitest + React Testing Library | Jest / Vitest (NestJS) | Pytest + pytest-cov |
+| **3. Security Audit** | `npm audit --audit-level=high` | `npm audit --audit-level=high` | `pip-audit` / `safety` |
+| **4. Validação de Build** | `tsc --noEmit && vite build` | `tsc --noEmit && nest build` | `docker build` / empacotamento Lambda |
+
+- **Fluxos de Referência (AdaptEdu):**
+  - [Pipeline de Validação e Checks Contínuos por PR](https://github.com/azevgabriel/AdaptEdu/actions/runs/44422188712)
+  - [Automação de Deleção de Branch pós-Merge](https://github.com/azevgabriel/AdaptEdu/actions/runs/44422189404)
+
+---
+
+### 3. 🧪 Ampliação da Cobertura de Testes
+
+- **Back-end Core (`apps/service`):** Cobertura abrangente dos Casos de Uso atômicos do `PlanningModule`, cenários de bifurcação e recursão na árvore hierárquica de blocos, integridade de transações ACID e resiliência a cancelamentos no transformador de streaming SSE (`DualOutputStreamTransformer`).
+- **Front-end (`apps/web`):** Testes unitários e de integração para os componentes do chat, do `Living Draft` e do algoritmo de paginação visual A4 (`paginatePlanning`).
+- **Engine Lambda (`apps/engine`):** Testes automatizados para validação de layout no Playwright e formatação estruturada de tabelas e metadados no worker DOCX.
+
+---
+
+### 4. 🤖 Engenharia de Contexto & Padronização de Agentes de IA
+
+Refinamento das instruções operacionais e do contexto dos coding agents (`AGENTS.md` e regras de domínio) com diretrizes especializadas:
+- **Design System (DS):** Diretrizes estritas para uso exclusivo dos primitivos do Radix UI, shadcn/ui e Tailwind CSS, coibindo estilos customizados fora do padrão visual.
+- **Arquitetura de Arquivos:** Definição explícita da organização de pastas e limites de domínio no monorepo (Clean Architecture no backend, Feature/Component slicing no frontend).
+- **Módulo de Segurança:** Guardrails claros contra vazamento de credenciais, sanitização mandatória de entradas e prevenção contra injeções.
+- **Padronização de Código:** Diretrizes de nomenclatura, convenções de tipagem estrita (TypeScript/Python) e tratamento idiomático de erros.
+
+---
+
+### 5. 📄 PDF com Estrutura Flexível e Alta Fidelidade à Referência da Escola
+
+Evolução do motor de exportação de PDF para conferir estrutura modular e dinâmica, adaptando-se com alta fidelidade ao modelo de planejamento, cabeçalhos institucionais, grades curriculares e identidade visual de cada escola ou rede de ensino parceira.
+
+> [!NOTE]
+> O planejamento arquitetural, as especificações técnicas e o caminho detalhado para implementação deste motor flexível serão formalizados e documentados em uma issue dedicada:
+> - 📌 **Issue de Referência:** *[A ser referenciada: feat(engine): flexibilidade estrutural e alta fidelidade de templates de PDF por escola]* <!-- Espaço reservado para o link da issue -->
+
+---
+
 ## 📚 Documentação Complementar
 
 - 📖 [`docs/WORKFLOW.md`](docs/WORKFLOW.md): Diretrizes de portões de aprovação e fluxo de implementação da IA.
