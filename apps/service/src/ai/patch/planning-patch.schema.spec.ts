@@ -188,15 +188,55 @@ describe('PlanningPatchSchema', () => {
       operation: 'FILL_METADATA',
       data: {
         colName: 'recursos_didaticos',
+        granularity: 'WEEKLY',
+        parentId: 'parent-block-1',
         values: [
-          { date: '2026-03-05', textValue: 'Cartolinas e tablets' },
-          { order: 2, textValue: 'Livro didático pág. 40' },
+          { date: '2026-03-05', textValue: 'Cartolinas e tablets', granularity: 'WEEKLY' },
+          { order: 2, textValue: 'Livro didático pág. 40', parentId: 'parent-block-1' },
+          { blockId: 'b-123', textValue: 'Vídeo projetor' },
         ],
       },
     };
 
     const result = planningPatchPayloadSchema.safeParse(payload);
     expect(result.success).toBe(true);
+    if (result.success && 'operation' in result.data) {
+      expect(result.data.data.granularity).toBe('WEEKLY');
+      expect(result.data.data.parentId).toBe('parent-block-1');
+      expect(result.data.data.values).toHaveLength(3);
+    }
+  });
+
+  it('deve validar com sucesso FILL_METADATA multi-colunas especificando colName em cada item de values', () => {
+    const payload = {
+      operation: 'FILL_METADATA',
+      data: {
+        values: [
+          { blockId: 'b-1', colName: 'recursos_espacos', textValue: 'Material Dourado' },
+          { blockId: 'b-1', colName: 'transposicao_pastoral', textValue: 'Solidariedade' },
+          { blockId: 'b-2', colName: 'estrategias_adaptativas', textValue: 'DUA e apoio visual' },
+        ],
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (result.success && 'operation' in result.data) {
+      expect(result.data.data.values).toHaveLength(3);
+      expect((result.data.data.values[0] as any).colName).toBe('recursos_espacos');
+    }
+  });
+
+  it('deve falhar validação de FILL_METADATA se colName for omitido na raiz e em item de values', () => {
+    const payload = {
+      operation: 'FILL_METADATA',
+      data: {
+        values: [{ blockId: 'b-1', textValue: 'Sem colName definido' }],
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(false);
   });
 
   it('deve validar com sucesso DELETE_BLOCK_WITH_GAP', () => {

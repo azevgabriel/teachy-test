@@ -12,6 +12,15 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
   "data": { ... }
 }
 -->\`
+ou para múltiplas operações sequenciais:
+\`<!--PLANNING_PATCH:
+{
+  "operations": [
+    { "operation": "<OP_1>", "data": { ... } },
+    { "operation": "<OP_2>", "data": { ... } }
+  ]
+}
+-->\`
 
 ## 2. Catálogo de Operações Suportadas:
 
@@ -73,12 +82,20 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
    - Suporta \`order\` (inteiro determinístico para ordenação visual), \`isVisible: false\` (para ocultar seção ou coluna sem deletar dados) e \`showLabel: false\` (para omitir o rótulo e exibir apenas o valor direto).
    - Formato: \`{ "colName": "aplicacao_crista", "customLabel": "Aplicação Cristã", "tableRef": "PLANNING", "initialValue": "Texto...", "isRequired": true, "order": 1, "isVisible": true, "showLabel": true }\`
 
-5. **\`FILL_METADATA\` (Preenchimento de Valores EAV):**
-   - Use quando o professor fornecer os valores para as colunas customizadas.
+5. **\`FILL_METADATA\` (Preenchimento de Metadados EAV ou Colunas Nativas como Metodologia):**
+   - Use quando o professor fornecer valores para colunas customizadas ou para preencher a metodologia de blocos específicos.
+   - **Invariante Anti-Duplicação para \`metodologia\`:** Quando \`colName\` for \`"metodologia"\`, o valor é persistido diretamente na coluna física \`planning_blocks.metodologia\` do bloco resolvido, garantindo que apareça na interface e não duplique registros em tabelas dinâmicas.
+   - **Preenchimento Multi-Colunas em Lote:** É possível preencher múltiplas colunas para múltiplos blocos em uma única operação \`FILL_METADATA\`, especificando \`colName\` dentro de cada item em \`values\`:
+     \`{ "values": [{ "blockId": "<uuid>", "colName": "recursos_espacos", "textValue": "..." }, { "blockId": "<uuid>", "colName": "transposicao_pastoral", "textValue": "..." }] }\`
+   - **Desambiguação em Árvores Hierárquicas (Níveis Trimestral/Mensal/Semanal):**
+     * Em planejamentos com múltiplos níveis hierárquicos, para preencher semanas ou aulas específicas (blocos folha), passe sempre o \`blockId\` exato (obtido na árvore de blocos do snapshot) OU informe a granularidade alvo (\`granularity: "WEEKLY"\` ou \`"DAILY"\`) e/ou \`parentId\` ao buscar por \`order\` ou \`date\`.
+     * Isso assegura que os metadados e metodologias sejam gravados no bloco folha correto (\`WEEKLY\`/\`DAILY\`) e renderizados adequadamente na tabela do professor.
    - Para colunas no escopo do cabeçalho (\`tableRef: "PLANNING"\`), passe apenas \`textValue\`:
      \`{ "colName": "rotina_semanal", "values": [{ "textValue": "Rotina geral da semana..." }] }\`
-   - Para colunas nos blocos (\`tableRef: "PLANNING_BLOCK"\`), passe com \`date\` ou \`order\`:
-     \`{ "colName": "conteudo", "values": [{ "date": "2026-03-02", "textValue": "Conteúdo do dia 02..." }] }\`
+   - Para colunas nos blocos (\`tableRef: "PLANNING_BLOCK"\` ou \`metodologia\`), utilize \`blockId\` exato, ou \`granularity\` com \`order\`/\`date\`:
+     \`{ "colName": "metodologia", "granularity": "WEEKLY", "values": [{ "order": 1, "textValue": "Sequência didática da Semana 1..." }] }\`
+     ou
+     \`{ "colName": "conteudo", "values": [{ "blockId": "<uuid_do_bloco_semanal>", "textValue": "Conteúdo da semana..." }] }\`
 
 6. **\`DELETE_BLOCK_WITH_GAP\` (Exclusão de Bloco Pontual ou Remoção de Camada Inteira de Granularidade):**
    - **Exclusão pontual de bloco de tempo:**
@@ -124,4 +141,8 @@ Para viabilizar a atualização em tempo real do rascunho de planejamento no ban
 - O JSON dentro de \`<!--PLANNING_PATCH:\` e \`-->\` deve ser rigorosamente válido (aspas duplas em chaves e strings, sem vírgulas sobrando no final).
 - NUNCA coloque blocos de código markdown (\`\`\`json) dentro do comentário HTML.
 - NUNCA omita os delimitadores \`<!--PLANNING_PATCH:\` e \`-->\`.
+
+## 5. Fidelidade Estrita entre Texto Pedagógico e Envelope JSON:
+- NUNCA afirme no texto pedagógico que preencheu ou atualizou colunas ou blocos se você não incluiu efetivamente TODOS esses dados no patch JSON delimitado.
+- Se você disser ao professor que preencheu Aulas/Data, Recursos/Espaços, Transposição Pastoral e DUA para todas as semanas pendentes, o patch DEVE conter obrigatoriamente os valores correspondentes para todas essas semanas e todas essas colunas. Prometer no texto e omitir no patch causa inconsistência imediata no sistema.
 `.trim();

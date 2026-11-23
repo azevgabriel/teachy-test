@@ -142,22 +142,42 @@ export const addSpecificationPatchSchema = z.object({
   data: addSpecificationPatchDataSchema,
 });
 
-// 4. Preenchimento de Metadados EAV
-export const fillMetadataPatchSchema = z.object({
-  operation: z.literal('FILL_METADATA'),
-  data: z.object({
-    colName: z.string(),
-    values: z.array(
-      z.object({
-        blockId: z.string().optional(),
-        date: z.string().optional(),
-        order: z.number().int().optional(),
-        textValue: z.string().optional(),
-        jsonbValue: z.unknown().optional(),
-      }),
-    ),
-  }),
-});
+// 4. Preenchimento de Metadados EAV ou Colunas Nativas (ex: metodologia)
+export const fillMetadataPatchSchema = z
+  .object({
+    operation: z.literal('FILL_METADATA'),
+    data: z.object({
+      colName: z.string().optional(),
+      granularity: planningGranularityEnum.optional(),
+      parentId: z.string().optional(),
+      values: z.array(
+        z.object({
+          blockId: z.string().optional(),
+          date: z.string().optional(),
+          order: z.number().int().optional(),
+          granularity: planningGranularityEnum.optional(),
+          parentId: z.string().optional(),
+          colName: z.string().optional(),
+          textValue: z.string().optional(),
+          jsonbValue: z.unknown().optional(),
+        }),
+      ),
+    }),
+  })
+  .superRefine((val, ctx) => {
+    const { colName, values } = val.data;
+    if (!colName) {
+      for (let i = 0; i < values.length; i++) {
+        if (!values[i].colName) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'colName deve ser especificado no nível raiz ou em cada item de values',
+            path: ['data', 'values', i, 'colName'],
+          });
+        }
+      }
+    }
+  });
 
 // 5. Exclusão de Bloco com Detecção de Gap
 export const deleteBlockWithGapPatchSchema = z.object({

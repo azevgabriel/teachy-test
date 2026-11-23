@@ -571,6 +571,32 @@ export function SectionDivider({
 					{parentBlock.metodologia}
 				</p>
 			)}
+
+			{/* Metadados Customizados do Bloco Pai (se houver e não for continuação) */}
+			{!isContinuation &&
+				parentBlock?.metadataValues &&
+				parentBlock.metadataValues.length > 0 && (
+					<div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+						{parentBlock.metadataValues.map((mv) => {
+							const label =
+								mv.specification?.customLabel || mv.specification?.colName;
+							if (!mv.textValue) return null;
+							return (
+								<span
+									key={mv.id}
+									className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200"
+								>
+									{label && (
+										<strong className="font-semibold text-slate-900">
+											{label}:
+										</strong>
+									)}
+									<span>{mv.textValue}</span>
+								</span>
+							);
+						})}
+					</div>
+				)}
 		</div>
 	);
 }

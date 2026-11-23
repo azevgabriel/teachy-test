@@ -62,12 +62,13 @@ export class ReorganizeHierarchyUseCase {
     let globalWeekOrder = 1;
 
     for (const parentBlock of parentBlocks) {
-      // Verifica se já existem blocos filhos deste pai com a granularidade desejada para evitar duplicações
+      // Verifica se o mês já possui a grade semanal completa (ordem >= 4)
       const alreadySubdivided = await this.prisma.planningBlock.findFirst({
         where: {
           planningId,
           parentId: parentBlock.id,
           granularity: childGranularity,
+          order: { gte: 4 },
         },
       });
       if (alreadySubdivided) {
@@ -114,13 +115,23 @@ export class ReorganizeHierarchyUseCase {
           });
         }
       } else {
-        // Gera novos blocos semanais calculados dentro do intervalo do mês
+        // Gera novos blocos semanais calculados dentro do intervalo do mês, preservando semanas já existentes
         const pStart = parentBlock.startAt || planning.startAt;
         const pEnd = parentBlock.endAt || planning.endAt;
 
         if (pStart && pEnd && childGranularity === 'WEEKLY') {
           const weeks = computeWeeksForPeriod(pStart, pEnd);
           for (const week of weeks) {
+            const exists = await this.prisma.planningBlock.findFirst({
+              where: {
+                planningId,
+                parentId: parentBlock.id,
+                granularity: childGranularity,
+                order: week.order,
+              },
+            });
+            if (exists) continue;
+
             await this.prisma.planningBlock.create({
               data: {
                 planningId,
@@ -137,6 +148,16 @@ export class ReorganizeHierarchyUseCase {
           // Fallback para 4 blocos se datas precisas não estiverem disponíveis
           const fallbackCount = childGranularity === 'WEEKLY' ? 4 : 2;
           for (let i = 1; i <= fallbackCount; i++) {
+            const exists = await this.prisma.planningBlock.findFirst({
+              where: {
+                planningId,
+                parentId: parentBlock.id,
+                granularity: childGranularity,
+                order: i,
+              },
+            });
+            if (exists) continue;
+
             await this.prisma.planningBlock.create({
               data: {
                 planningId,
