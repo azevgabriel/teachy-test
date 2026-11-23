@@ -1,12 +1,18 @@
-import { Bot, Copy, User } from "lucide-react";
+import { Bot, Copy, Download, User } from "lucide-react";
 import * as React from "react";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { ScrollArea } from "#/components/ui/scroll-area";
 import { cn } from "#/lib/utils";
+import { getAttachmentTypeIcon } from "./ChatInput";
 import { ExportActionCard } from "./ExportActionCard";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { getExportPlanningCommands, type Message } from "./types";
+import {
+	formatFileSize,
+	getExportPlanningCommands,
+	getMessageAttachment,
+	type Message,
+} from "./types";
 
 interface ChatTimelineProps {
 	messages: Message[];
@@ -222,6 +228,8 @@ export function ChatTimeline({
 									? getExportPlanningCommands(message.commands)
 									: [];
 
+							const attachment = getMessageAttachment(message);
+
 							return (
 								<div
 									key={message.id}
@@ -249,6 +257,45 @@ export function ChatTimeline({
 												"border border-amber-300/40 dark:border-amber-600/40",
 										)}
 									>
+										{/* Card de anexo enviado pelo usuário */}
+										{attachment && (
+											<div
+												data-testid="message-attachment-card"
+												className="flex items-center justify-between gap-3 p-2.5 px-3 rounded-xl bg-emerald-700/80 border border-emerald-500/40 text-white mb-2 shadow-xs"
+											>
+												<div className="flex items-center gap-2.5 min-w-0">
+													<div className="h-8 w-8 rounded-lg bg-emerald-800/80 flex items-center justify-center text-white shrink-0 shadow-xs">
+														{getAttachmentTypeIcon(
+															attachment.mimeType || "",
+															attachment.name,
+														)}
+													</div>
+													<div className="flex flex-col min-w-0">
+														<span className="font-semibold text-xs truncate max-w-[170px] sm:max-w-xs md:max-w-sm text-white">
+															{attachment.name}
+														</span>
+														{attachment.size ? (
+															<span className="text-[10px] text-emerald-200">
+																{formatFileSize(attachment.size)}
+															</span>
+														) : null}
+													</div>
+												</div>
+												{attachment.url && (
+													<a
+														href={attachment.url}
+														target="_blank"
+														rel="noopener noreferrer"
+														download={attachment.name}
+														className="h-6 w-6 rounded-md bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center text-white shrink-0 transition-colors"
+														title="Baixar ou visualizar anexo"
+													>
+														<Download className="h-3.5 w-3.5" />
+													</a>
+												)}
+											</div>
+										)}
+
 										{/* Conteúdo da mensagem com suporte a markdown e risco no texto quando apropriado */}
 										<div
 											className={cn(

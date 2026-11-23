@@ -235,6 +235,60 @@ describe('ChatService', () => {
   });
 
   describe('processMessageStream', () => {
+    it('persists user message with attachment metadata when provided', async () => {
+      const mockSession = {
+        id: 'session-att',
+        name: 'Sessão com Anexo',
+        conversations: [],
+      };
+      prismaMock.session.findUnique.mockResolvedValue(mockSession);
+      prismaMock.conversation.create.mockImplementation((args: any) =>
+        Promise.resolve({ id: 'msg-id', ...args.data }),
+      );
+      prismaMock.conversation.update.mockImplementation((args: any) =>
+        Promise.resolve({ id: args.where.id, ...args.data }),
+      );
+      prismaMock.session.update.mockResolvedValue({});
+      aiServiceMock.streamChat.mockResolvedValue('Ok');
+
+      await chatService.processMessageStream(
+        'session-att',
+        'Monte o plano com base na matriz',
+        new AbortController().signal,
+        () => {},
+        undefined,
+        {
+          id: 'doc-123',
+          name: 'matriz.pdf',
+          size: 1024,
+          mimeType: 'application/pdf',
+          url: '/api/documents/doc-123/download',
+        },
+      );
+
+      expect(prismaMock.conversation.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sessionId: 'session-att',
+          text: 'Monte o plano com base na matriz',
+          type: 'USER',
+          commands: {
+            attachment: {
+              id: 'doc-123',
+              name: 'matriz.pdf',
+              size: 1024,
+              mimeType: 'application/pdf',
+              url: '/api/documents/doc-123/download',
+            },
+          },
+        }),
+      });
+      expect(aiServiceMock.streamChat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userMessage: expect.stringContaining('matriz.pdf'),
+        }),
+      );
+    });
+
     it('records user message, streams chunks, and saves completed IA response', async () => {
       const mockSession = {
         id: 's1',

@@ -1,3 +1,87 @@
+export interface MessageAttachment {
+	id?: string;
+	name: string;
+	size?: number;
+	mimeType?: string;
+	url?: string;
+}
+
+export interface PendingAttachment {
+	file?: File;
+	documentId?: string;
+	name: string;
+	size: number;
+	mimeType: string;
+	previewUrl?: string;
+}
+
+export interface ReferenceDocumentItem {
+	id: string;
+	originalName: string;
+	storedFileName?: string;
+	mimeType: string;
+	fileSize: number;
+	createdAt: string;
+	updatedAt?: string;
+	url?: string;
+	isLinkedToSession?: boolean;
+}
+
+export const ALLOWED_FILE_TYPES = [
+	"application/pdf",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"image/png",
+	"image/jpeg",
+	"image/webp",
+];
+
+export const ALLOWED_EXTENSIONS = [
+	".pdf",
+	".docx",
+	".png",
+	".jpg",
+	".jpeg",
+	".webp",
+];
+
+export const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+
+export function validateUploadFile(file: File): {
+	valid: boolean;
+	error?: string;
+} {
+	const ext = `.${(file.name.split(".").pop() || "").toLowerCase()}`;
+	const isMimeAllowed = ALLOWED_FILE_TYPES.includes(file.type);
+	const isExtAllowed = ALLOWED_EXTENSIONS.includes(ext);
+
+	if (!isMimeAllowed && !isExtAllowed) {
+		return {
+			valid: false,
+			error:
+				"Formato inválido. Por favor, envie arquivos PDF, DOCX, PNG, JPEG ou WebP.",
+		};
+	}
+
+	if (file.size > MAX_FILE_SIZE) {
+		return {
+			valid: false,
+			error: "O arquivo excede o limite máximo permitido de 20MB.",
+		};
+	}
+
+	return { valid: true };
+}
+
+export function formatFileSize(bytes?: number): string {
+	if (!bytes || bytes <= 0) return "0 B";
+	const units = ["B", "KB", "MB", "GB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(1024));
+	const formatted = (bytes / 1024 ** i)
+		.toFixed(i === 0 ? 0 : 1)
+		.replace(/\.0$/, "");
+	return `${formatted} ${units[i]}`;
+}
+
 export interface ExportPlanningCommandData {
 	format: "pdf" | "docx";
 	orientation: "portrait" | "landscape";
@@ -16,6 +100,7 @@ export interface PlanningCommandsPayload {
 	operation?: string;
 	data?: unknown;
 	operations?: PlanningCommand[];
+	attachment?: MessageAttachment;
 }
 
 export interface Message {
@@ -26,6 +111,22 @@ export interface Message {
 	interrupted: boolean;
 	createdAt: string;
 	commands?: PlanningCommandsPayload | PlanningCommand | null;
+	attachment?: MessageAttachment | null;
+}
+
+export function getMessageAttachment(
+	message: Message,
+): MessageAttachment | null {
+	if (message.attachment) {
+		return message.attachment;
+	}
+	if (message.commands && typeof message.commands === "object") {
+		const cmds = message.commands as { attachment?: MessageAttachment };
+		if (cmds.attachment) {
+			return cmds.attachment;
+		}
+	}
+	return null;
 }
 
 export function getExportPlanningCommands(

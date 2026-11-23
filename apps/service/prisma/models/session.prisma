@@ -1,11 +1,12 @@
 model Session {
-  id            String         @id @default(uuid())
-  name          String
-  conversations  Conversation[]
-  plannings      Planning[]
-  specifications Specification[]
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  id                 String              @id @default(uuid())
+  name               String
+  conversations      Conversation[]
+  plannings          Planning[]
+  specifications     Specification[]
+  referenceDocuments ReferenceDocument[]
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
 
   @@map("sessions")
 }

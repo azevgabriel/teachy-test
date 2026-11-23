@@ -300,6 +300,13 @@ export class ChatService {
     signal: AbortSignal,
     onChunk: (chunk: string, messageId: string) => void,
     onInit?: (messageId: string) => void,
+    attachment?: {
+      id?: string;
+      name: string;
+      size?: number;
+      mimeType?: string;
+      url?: string;
+    },
   ): Promise<StreamResult> {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
@@ -314,12 +321,13 @@ export class ChatService {
       throw new NotFoundException(`Sessão com ID ${sessionId} não encontrada.`);
     }
 
-    // 1. Salvar a mensagem do usuário
+    // 1. Salvar a mensagem do usuário (incluindo metadados do anexo caso presente)
     const userMessage = await this.prisma.conversation.create({
       data: {
         sessionId,
         text: userText,
         type: 'USER',
+        commands: attachment ? ({ attachment } as any) : undefined,
         interrupted: false,
       },
     });
@@ -410,10 +418,14 @@ export class ChatService {
     let cancelled = false;
     const transformer = new DualOutputStreamTransformer();
 
+    const userMessageForAi = attachment
+      ? `[Documento de Referência Anexado: "${attachment.name}"]\n${userText}`
+      : userText;
+
     try {
       await this.aiService.streamChat({
         history,
-        userMessage: userText,
+        userMessage: userMessageForAi,
         signal,
         systemInstruction,
         onChunk: (chunk) => {

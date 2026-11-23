@@ -9,16 +9,23 @@ import {
   Post,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { ChatService } from './chat.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
 import { createSessionSchema } from './dto/create-session.dto.js';
 import { renameSessionSchema } from './dto/rename-session.dto.js';
 import { sendMessageSchema } from './dto/send-message.dto.js';
 
 @Controller('api/sessions')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly documentsService: DocumentsService,
+  ) {}
 
   @Get()
   async listSessions() {
@@ -28,6 +35,18 @@ export class ChatController {
   @Get(':id')
   async getSession(@Param('id') id: string) {
     return this.chatService.getSession(id);
+  }
+
+  @Post(':id/attachments')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAttachment(
+    @Param('id') sessionId: string,
+    @UploadedFile() file: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+    return this.documentsService.uploadDocument(file, sessionId);
   }
 
   @Post()
@@ -68,7 +87,7 @@ export class ChatController {
       });
     }
 
-    const { text } = parseResult.data;
+    const { text, attachment } = parseResult.data;
 
     // Configurar headers para Server-Sent Events / Chunked streaming
     res.setHeader('Content-Type', 'text/event-stream');
@@ -106,6 +125,7 @@ export class ChatController {
             (res as any).flush?.();
           }
         },
+        attachment,
       );
 
       if (!res.writableEnded) {
