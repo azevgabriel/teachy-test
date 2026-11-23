@@ -2,6 +2,7 @@ import {
 	Calendar,
 	Check,
 	Clock,
+	FolderOpen,
 	MessageSquare,
 	PanelRightClose,
 	PanelRightOpen,
@@ -27,6 +28,7 @@ interface SidebarProps {
 	onNewChat: () => void;
 	onRenameSession?: (id: string, newName: string) => Promise<void>;
 	onDeleteSession?: (id: string) => Promise<void>;
+	onOpenDocumentsDrawer?: () => void;
 }
 
 function formatDate(dateString: string): string {
@@ -84,6 +86,7 @@ export function Sidebar({
 	onNewChat,
 	onRenameSession,
 	onDeleteSession,
+	onOpenDocumentsDrawer,
 }: SidebarProps) {
 	const [editingId, setEditingId] = React.useState<string | null>(null);
 	const [editingName, setEditingName] = React.useState("");
@@ -123,27 +126,42 @@ export function Sidebar({
 			)}
 		>
 			{/* Top Bar with Toggle and New Chat */}
-			<div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800 gap-2">
+			<div className="flex flex-col p-3 border-b border-slate-200 dark:border-slate-800 gap-2">
 				{isOpen ? (
 					<>
-						<Button
-							variant="default"
-							size="sm"
-							onClick={onNewChat}
-							className="flex-1 justify-start gap-2 text-xs font-semibold"
-						>
-							<Plus className="h-4 w-4" />
-							Nova Conversa
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
-							onClick={onToggle}
-							title="Recolher barra lateral"
-							className="h-8 w-8 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
-						>
-							<PanelRightClose className="h-4 w-4" />
-						</Button>
+						<div className="flex items-center justify-between gap-2">
+							<Button
+								variant="default"
+								size="sm"
+								onClick={onNewChat}
+								className="flex-1 justify-start gap-2 text-xs font-semibold"
+							>
+								<Plus className="h-4 w-4" />
+								Nova Conversa
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
+								onClick={onToggle}
+								title="Recolher barra lateral"
+								className="h-8 w-8 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+							>
+								<PanelRightClose className="h-4 w-4" />
+							</Button>
+						</div>
+						{onOpenDocumentsDrawer && (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={onOpenDocumentsDrawer}
+								data-testid="sidebar-open-documents-btn"
+								className="w-full justify-start gap-2 text-xs border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400"
+							>
+								<FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+								<span>Documentos de Referência</span>
+							</Button>
+						)}
 					</>
 				) : (
 					<div className="flex flex-col items-center w-full gap-2">
@@ -165,6 +183,19 @@ export function Sidebar({
 						>
 							<Plus className="h-4 w-4" />
 						</Button>
+						{onOpenDocumentsDrawer && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon"
+								onClick={onOpenDocumentsDrawer}
+								title="Documentos de Referência"
+								data-testid="sidebar-open-documents-collapsed-btn"
+								className="h-9 w-9 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400"
+							>
+								<FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+							</Button>
+						)}
 					</div>
 				)}
 			</div>

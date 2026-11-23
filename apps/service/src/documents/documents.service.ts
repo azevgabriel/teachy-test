@@ -206,6 +206,13 @@ export class DocumentsService {
       throw new NotFoundException(`Sessão ${sessionId} não encontrada.`);
     }
 
+    const doc = await this.prisma.referenceDocument.findUnique({
+      where: { id: documentId },
+    });
+    if (!doc) {
+      throw new NotFoundException(`Documento ${documentId} não encontrado.`);
+    }
+
     await this.prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -216,6 +223,36 @@ export class DocumentsService {
     });
 
     return { success: true };
+  }
+
+  async listSessionDocuments(sessionId: string): Promise<DocumentResponseDto[]> {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) {
+      throw new NotFoundException(`Sessão ${sessionId} não encontrada.`);
+    }
+
+    const docs = await this.prisma.referenceDocument.findMany({
+      where: {
+        sessions: {
+          some: { id: sessionId },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return docs.map((doc: any) => ({
+      id: doc.id,
+      originalName: doc.originalName,
+      storedFileName: doc.storedFileName,
+      mimeType: doc.mimeType,
+      fileSize: doc.fileSize,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+      url: `/api/documents/${doc.id}/download`,
+      isLinkedToSession: true,
+    }));
   }
 
   async deleteDocument(id: string): Promise<{ success: boolean }> {

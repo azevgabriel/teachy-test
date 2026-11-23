@@ -13,6 +13,7 @@ describe('DocumentsController', () => {
     documentsServiceMock = {
       uploadDocument: vi.fn(),
       listDocuments: vi.fn(),
+      listSessionDocuments: vi.fn(),
       getDocument: vi.fn(),
       getDocumentEntity: vi.fn(),
       linkDocumentToSession: vi.fn(),
@@ -59,5 +60,13 @@ describe('DocumentsController', () => {
 
     expect(await controller.linkDocument('s1', 'd1')).toEqual({ success: true });
     expect(await controller.unlinkDocument('s1', 'd1')).toEqual({ success: true });
+  });
+
+  it('lists session documents for specific session', async () => {
+    documentsServiceMock.listSessionDocuments.mockResolvedValue([{ id: 'doc-1', isLinkedToSession: true }]);
+
+    const res = await controller.listSessionDocuments('s1');
+    expect(documentsServiceMock.listSessionDocuments).toHaveBeenCalledWith('s1');
+    expect(res).toEqual([{ id: 'doc-1', isLinkedToSession: true }]);
   });
 });

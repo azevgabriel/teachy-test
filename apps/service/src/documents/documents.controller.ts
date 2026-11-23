@@ -81,6 +81,6 @@ export class DocumentsController {
 
   @Get('sessions/:sessionId/documents')
   async listSessionDocuments(@Param('sessionId') sessionId: string) {
-    return this.documentsService.listDocuments(sessionId);
+    return this.documentsService.listSessionDocuments(sessionId);
   }
 }

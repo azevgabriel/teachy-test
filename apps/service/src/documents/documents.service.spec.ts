@@ -169,6 +169,35 @@ describe('DocumentsService', () => {
     });
   });
 
+  describe('listSessionDocuments', () => {
+    it('returns only documents linked to the requested session', async () => {
+      prismaMock.session.findUnique.mockResolvedValue({ id: 's1' });
+      prismaMock.referenceDocument.findMany.mockResolvedValue([
+        {
+          id: 'doc-1',
+          originalName: 'arq1.pdf',
+          storedFileName: 'uuid1.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 100,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const res = await service.listSessionDocuments('s1');
+
+      expect(prismaMock.session.findUnique).toHaveBeenCalledWith({
+        where: { id: 's1' },
+      });
+      expect(prismaMock.referenceDocument.findMany).toHaveBeenCalledWith({
+        where: { sessions: { some: { id: 's1' } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(res).toHaveLength(1);
+      expect(res[0].isLinkedToSession).toBe(true);
+    });
+  });
+
   describe('link / unlink', () => {
     it('links document to session', async () => {
       prismaMock.session.findUnique.mockResolvedValue({ id: 's1' });
@@ -182,8 +211,9 @@ describe('DocumentsService', () => {
       });
     });
 
-    it('unlinks document from session', async () => {
+    it('unlinks document from session without deleting from global repository', async () => {
       prismaMock.session.findUnique.mockResolvedValue({ id: 's1' });
+      prismaMock.referenceDocument.findUnique.mockResolvedValue({ id: 'd1' });
 
       const res = await service.unlinkDocumentFromSession('s1', 'd1');
       expect(res.success).toBe(true);
@@ -191,6 +221,43 @@ describe('DocumentsService', () => {
         where: { id: 's1' },
         data: { referenceDocuments: { disconnect: { id: 'd1' } } },
       });
+      // Verifies referenceDocument.delete and localStorage.deleteFile are NEVER called on unlink
+      expect(prismaMock.referenceDocument.delete).not.toHaveBeenCalled();
+      expect(localStorageMock.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('supports multi-session linking and preserves document when unlinked from one session', async () => {
+      prismaMock.session.findUnique.mockResolvedValue({ id: 's1' });
+      prismaMock.referenceDocument.findUnique.mockResolvedValue({
+        id: 'doc-shared',
+        originalName: 'matriz.pdf',
+      });
+
+      // Link to session 1
+      await service.linkDocumentToSession('s1', 'doc-shared');
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: { referenceDocuments: { connect: { id: 'doc-shared' } } },
+      });
+
+      // Link to session 2
+      prismaMock.session.findUnique.mockResolvedValue({ id: 's2' });
+      await service.linkDocumentToSession('s2', 'doc-shared');
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: 's2' },
+        data: { referenceDocuments: { connect: { id: 'doc-shared' } } },
+      });
+
+      // Unlink from session 1
+      prismaMock.session.findUnique.mockResolvedValue({ id: 's1' });
+      await service.unlinkDocumentFromSession('s1', 'doc-shared');
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: { referenceDocuments: { disconnect: { id: 'doc-shared' } } },
+      });
+
+      // Global reference document is NOT deleted
+      expect(prismaMock.referenceDocument.delete).not.toHaveBeenCalled();
     });
   });
 
