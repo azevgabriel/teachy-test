@@ -81,6 +81,17 @@ describe('LocalStorageService', () => {
     );
   });
 
+  it('reads file buffer for existing file', async () => {
+    const file = {
+      originalname: 'leitura.pdf',
+      buffer: Buffer.from('buffer para leitura'),
+    };
+    const saved = await service.saveFile(file);
+
+    const read = await service.readFile(saved.localFilePath);
+    expect(read.toString()).toBe('buffer para leitura');
+  });
+
   it('deletes file successfully from disk', async () => {
     const saved = await service.saveFile({
       originalname: 'deletar.pdf',

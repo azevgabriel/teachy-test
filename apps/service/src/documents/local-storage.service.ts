@@ -60,6 +60,21 @@ export class LocalStorageService {
     return fs.createReadStream(resolvedPath);
   }
 
+  async readFile(localFilePath: string): Promise<Buffer> {
+    const resolvedPath = path.resolve(localFilePath);
+    const resolvedStorageDir = path.resolve(this.storageDir);
+
+    if (!resolvedPath.startsWith(resolvedStorageDir)) {
+      throw new NotFoundException('Acesso negado ao arquivo solicitado.');
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
+      throw new NotFoundException('Arquivo físico não encontrado no servidor.');
+    }
+
+    return fs.promises.readFile(resolvedPath);
+  }
+
   async deleteFile(localFilePath: string): Promise<boolean> {
     try {
       const resolvedPath = path.resolve(localFilePath);

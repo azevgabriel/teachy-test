@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DocumentsService } from './documents.service.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { LocalStorageService } from './local-storage.service.js';
-import { BadRequestException } from '@nestjs/common';
+import type { ContentExtractionPipeline } from '../ingestion/content-extraction.pipeline.js';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('DocumentsService', () => {
   let service: DocumentsService;
   let prismaMock: any;
   let localStorageMock: any;
+  let extractionPipelineMock: any;
 
   beforeEach(() => {
     prismaMock = {
@@ -19,6 +21,7 @@ describe('DocumentsService', () => {
         create: vi.fn(),
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        update: vi.fn(),
         delete: vi.fn(),
       },
     };
@@ -27,11 +30,17 @@ describe('DocumentsService', () => {
       saveFile: vi.fn(),
       getFileStream: vi.fn(),
       deleteFile: vi.fn(),
+      readFile: vi.fn(),
+    };
+
+    extractionPipelineMock = {
+      extract: vi.fn(),
     };
 
     service = new DocumentsService(
       prismaMock as unknown as PrismaService,
       localStorageMock as unknown as LocalStorageService,
+      extractionPipelineMock as unknown as ContentExtractionPipeline,
     );
   });
 
@@ -275,6 +284,94 @@ describe('DocumentsService', () => {
       expect(prismaMock.referenceDocument.delete).toHaveBeenCalledWith({
         where: { id: 'd1' },
       });
+    });
+  });
+
+  describe('extractDocument', () => {
+    it('throws NotFoundException when document does not exist', async () => {
+      prismaMock.referenceDocument.findUnique.mockResolvedValue(null);
+      await expect(service.extractDocument('non-existent')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('returns cached extraction without reading disk or running pipeline when cached', async () => {
+      const cachedData = {
+        layout: {
+          suggestedGranularity: 'BIMONTHLY',
+          hierarchyLevels: ['BIMONTHLY', 'WEEKLY'],
+          columns: [{ name: 'metodologia', isCore: true }],
+        },
+        data: {
+          curricularComponent: 'Matemática',
+          applicationYear: '3º ano do Ensino Fundamental I',
+        },
+      };
+
+      prismaMock.referenceDocument.findUnique.mockResolvedValue({
+        id: 'doc-cached',
+        extractedText: 'Extracted raw text cached',
+        extractedData: cachedData,
+      });
+
+      const result = await service.extractDocument('doc-cached');
+
+      expect(result).toEqual({
+        layout: cachedData.layout,
+        data: cachedData.data,
+        rawText: 'Extracted raw text cached',
+      });
+      expect(localStorageMock.readFile).not.toHaveBeenCalled();
+      expect(extractionPipelineMock.extract).not.toHaveBeenCalled();
+      expect(prismaMock.referenceDocument.update).not.toHaveBeenCalled();
+    });
+
+    it('processes document on cache miss, updates database cache, and returns extracted data', async () => {
+      prismaMock.referenceDocument.findUnique.mockResolvedValue({
+        id: 'doc-uncached',
+        localFilePath: '/tmp/doc.pdf',
+        mimeType: 'application/pdf',
+        originalName: 'doc.pdf',
+        extractedText: null,
+        extractedData: null,
+      });
+
+      const fileBuffer = Buffer.from('pdf contents');
+      localStorageMock.readFile.mockResolvedValue(fileBuffer);
+
+      const mockExtracted = {
+        layout: {
+          suggestedGranularity: 'ANNUAL',
+          hierarchyLevels: ['ANNUAL', 'MONTHLY'],
+          columns: [{ name: 'metodologia', isCore: true }],
+        },
+        data: {
+          curricularComponent: 'Física',
+          applicationYear: '1ª série do Ensino Médio',
+        },
+        rawText: 'Física EM 1ª série',
+      };
+      extractionPipelineMock.extract.mockResolvedValue(mockExtracted);
+
+      const result = await service.extractDocument('doc-uncached');
+
+      expect(localStorageMock.readFile).toHaveBeenCalledWith('/tmp/doc.pdf');
+      expect(extractionPipelineMock.extract).toHaveBeenCalledWith({
+        buffer: fileBuffer,
+        mimeType: 'application/pdf',
+        originalName: 'doc.pdf',
+      });
+      expect(prismaMock.referenceDocument.update).toHaveBeenCalledWith({
+        where: { id: 'doc-uncached' },
+        data: {
+          extractedText: mockExtracted.rawText,
+          extractedData: {
+            layout: mockExtracted.layout,
+            data: mockExtracted.data,
+          },
+        },
+      });
+      expect(result).toEqual(mockExtracted);
     });
   });
 });

@@ -83,4 +83,14 @@ export class DocumentsController {
   async listSessionDocuments(@Param('sessionId') sessionId: string) {
     return this.documentsService.listSessionDocuments(sessionId);
   }
+
+  @Get('documents/:id/extract')
+  async extractDocument(@Param('id') id: string) {
+    return this.documentsService.extractDocument(id);
+  }
+
+  @Post('documents/:id/extract')
+  async triggerExtractDocument(@Param('id') id: string) {
+    return this.documentsService.extractDocument(id);
+  }
 }
