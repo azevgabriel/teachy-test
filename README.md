@@ -303,13 +303,22 @@ npm run prisma:migrate
 npm run prisma:seed
 ```
 
-#### ⚠️ Problemas com credenciais no Docker?
+#### ⚠️ Problemas com credenciais no Docker? (`FATAL: role "<user>" does not exist`)
 
-Se você alterar `POSTGRES_DB`, `POSTGRES_USER` ou `POSTGRES_PASSWORD` no `.env` após o volume já ter sido inicializado, o PostgreSQL ignora as novas variáveis. Para recriar o banco com as novas configurações:
+Se você alterar `POSTGRES_DB`, `POSTGRES_USER` ou `POSTGRES_PASSWORD` no `.env` após o contêiner já ter subido alguma vez, os logs do PostgreSQL (`docker compose logs postgres`) exibirão erros de autenticação (`FATAL: role "<user>" does not exist`).
+
+Para recriar o banco com as novas configurações, derrube os contêineres forçando a exclusão do volume com a flag `-v`:
 
 ```bash
+# 1. Remove os contêineres e destrói o volume com os dados antigos
 docker compose down -v
+
+# 2. Sobe novamente (o PostgreSQL criará o novo usuário e banco do zero)
 docker compose up -d
+
+# 3. Recria as tabelas e popula o catálogo da BNCC
+npm run prisma:migrate
+npm run prisma:seed
 ```
 
 ---
