@@ -68,7 +68,6 @@ flowchart TD
     AWSClient -->|"HTTP POST: 8080/2015-03-31/functions/function/invocations"| LambdaRIE
     GoogleGenAIClient <-->|"HTTPS - Stream de Tokens"| Gemini
 ```
-
 </details>
 
 ### Detalhamento dos Componentes
@@ -77,7 +76,7 @@ flowchart TD
    - **Tecnologias:** React 19, Vite.js, Tailwind CSS v4, TanStack Router e design system com Radix UI / shadcn/ui.
    - **Navegador Web:** Executado diretamente na máquina host (`http://localhost:5173`), entregando ao professor uma experiência fluida de co-criação.
    - **Comunicação Híbrida Segregada:**
-     - **Streaming em Tempo Real (SSE):** Consumo contínuo de tokens pedagógicos da IA via Server-Sent Events, com suporte a cancelamento cooperativo instantâneo (_cancel mid-flight_) através de `AbortController`.
+     - **Streaming em Tempo Real (SSE):** Consumo contínuo de tokens pedagógicos da IA via Server-Sent Events, com suporte a cancelamento cooperativo instantâneo (*cancel mid-flight*) através de `AbortController`.
      - **REST Tradicional (`async/await`):** Operações determinísticas de CRUD, paginação, download de arquivos e recuperação de dados de sessões.
    - **Living Draft:** Visualizador em tempo real paginado em padrão folha A4 com renderização precisa do planejamento em co-criação.
 
@@ -90,7 +89,7 @@ flowchart TD
    - **Clientes & Integrações Centrais:**
      - **Prisma ORM Client:** Mapeamento objeto-relacional com schemas modulares em `prisma/models/`, gerenciando transações ACID, integridade referencial e o catálogo oficial da BNCC.
      - **AWS SDK Client (Lambda Invoker):** Despacha requisições de conversão ao microsserviço de renderização via protocolo padrão AWS Lambda RIE, isolando I/O gráfico pesado do backend principal.
-     - **Google GenAI SDK Client:** Interface com o modelo **Gemini 3.8 Flash**, injetando o estado atual do banco como _Snapshot Único da Verdade_, aplicando guardrails pedagógicos e processando o transformador de saída dupla (`DualOutputStreamTransformer`) para separar o diálogo humano do payload estruturado oculto (`<!--PLANNING_PATCH: ... -->`).
+     - **Google GenAI SDK Client:** Interface com o modelo **Gemini 3.8 Flash**, injetando o estado atual do banco como *Snapshot Único da Verdade*, aplicando guardrails pedagógicos e processando o transformador de saída dupla (`DualOutputStreamTransformer`) para separar o diálogo humano do payload estruturado oculto (`<!--PLANNING_PATCH: ... -->`).
 
 4. **Container: Database (`teachy_postgres`):**
    - **Imagem Oficial:** `postgres:16-alpine`.
@@ -99,7 +98,7 @@ flowchart TD
    - **Conexão:** `TCP: 5432` com pool de conexões otimizado pelo Prisma.
 
 5. **Container: Microserviço de Conversão (`apps/engine` — `teachy_engine`):**
-   - **Imagem Base:** `public.ecr.aws/lambda/python:3.12` com Amazon Linux 2023 e AWS Lambda RIE (_Runtime Interface Emulator_) embutido.
+   - **Imagem Base:** `public.ecr.aws/lambda/python:3.12` com Amazon Linux 2023 e AWS Lambda RIE (*Runtime Interface Emulator*) embutido.
    - **Paridade Cloud:** Permite invocações idênticas às de uma função AWS Lambda Serverless através de `HTTP POST: 8080/2015-03-31/functions/function/invocations`.
    - **Motores de Renderização Especializados:**
      - **Playwright (Chromium Headless) - PDF:** Executa o Chromium headless para compilar o HTML/CSS do planejamento diretamente para PDF A4 (retrato ou paisagem), garantindo exata paridade visual com a interface.
@@ -112,12 +111,12 @@ flowchart TD
 
 ### Resumo das Comunicações & Protocolos
 
-| Origem                              | Destino                             | Protocolo / Porta                      | Finalidade                                                                       |
-| :---------------------------------- | :---------------------------------- | :------------------------------------- | :------------------------------------------------------------------------------- |
-| **Navegador Web (`apps/web`)**      | **NestJS Backend (`apps/service`)** | `HTTP REST` / `SSE Stream` (`:3000`)   | Envio de comandos, upload de materiais, streaming de respostas da IA e consultas |
-| **NestJS Backend (`apps/service`)** | **PostgreSQL (`teachy_postgres`)**  | `TCP: 5432` (SQL Queries via Prisma)   | Persistência transacional, catálogo da BNCC e consultas relacionais              |
-| **NestJS Backend (`apps/service`)** | **Engine Lambda (`teachy_engine`)** | `HTTP POST: 8080/2015-03-31/...` (RIE) | Invocação assíncrona para renderização de alta fidelidade em PDF e DOCX          |
-| **NestJS Backend (`apps/service`)** | **Google Cloud AI**                 | `HTTPS` (Stream de Tokens)             | Geração de linguagem natural e emissão de patches estruturados da IA             |
+| Origem | Destino | Protocolo / Porta | Finalidade |
+| :--- | :--- | :--- | :--- |
+| **Navegador Web (`apps/web`)** | **NestJS Backend (`apps/service`)** | `HTTP REST` / `SSE Stream` (`:3000`) | Envio de comandos, upload de materiais, streaming de respostas da IA e consultas |
+| **NestJS Backend (`apps/service`)** | **PostgreSQL (`teachy_postgres`)** | `TCP: 5432` (SQL Queries via Prisma) | Persistência transacional, catálogo da BNCC e consultas relacionais |
+| **NestJS Backend (`apps/service`)** | **Engine Lambda (`teachy_engine`)** | `HTTP POST: 8080/2015-03-31/...` (RIE) | Invocação assíncrona para renderização de alta fidelidade em PDF e DOCX |
+| **NestJS Backend (`apps/service`)** | **Google Cloud AI** | `HTTPS` (Stream de Tokens) | Geração de linguagem natural e emissão de patches estruturados da IA |
 
 ---
 
