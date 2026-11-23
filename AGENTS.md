@@ -30,3 +30,20 @@ The monorepo is divided into strict domains. Before modifying any application, t
 | :--- | :--- | :--- |
 | `apps/service/` | **Backend Core (NestJS + Prisma + PostgreSQL):** Business logic, persistence, lesson planning orchestration, and AI streaming. | 📖 Read [`apps/service/docs/GLOBAL.md`](apps/service/docs/GLOBAL.md) (and [`apps/service/docs/planning/`](apps/service/docs/planning/README.md) for lesson planning features) |
 | `apps/web/` | **Frontend (React + TanStack Router + Tailwind CSS):** Teacher-facing interactive UI. | 📖 Read [`apps/web/docs/GLOBAL.md`](apps/web/docs/GLOBAL.md) |
+
+---
+
+## 🧩 Lesson Planning & AI Patch Invariants (Issue #38 Learnings)
+
+Any agent working on `apps/service/src/planning` or `apps/service/src/ai` must strictly observe these 5 domain invariants:
+
+1. **Leaf Node Priority in Hierarchical Mutations:**
+   In multi-level plans (e.g. `TRIMESTER` $\rightarrow$ `MONTHLY` $\rightarrow$ `WEEKLY`), block-level mutations and metadata fills must resolve the **leaf node** (`children.length === 0` / target granularity), never naively matching `order: 1` or date ranges on ancestor parent blocks. Resolution precedence: `blockId` > `parentId` + `order` > `granularity` + `date`.
+2. **Anti-Duplication for Native Block Columns (`metodologia`):**
+   `metodologia` is a physical column in `planning_blocks`. Patches writing methodology must persist exclusively to `planningBlock.metodologia` and ensure 0 rows are generated in `planning_metadata_values` (atomically deleting any duplicate EAV records).
+3. **Idempotent Top-Down Subdivisions (`REORGANIZE_TREE`):**
+   Subdividing a block into child weeks must ensure the full grid of 4 weeks per month exists (`order >= 4`), preserving existing weeks, IDs, methodologies, and metadata without duplicating or overwriting them.
+4. **Multi-Column & Multi-Operation Patch Flexibility:**
+   The `FILL_METADATA` schema supports passing `colName` per item in `values`, allowing multiple custom columns across multiple blocks in a single operation. For multiple distinct actions, use the `{ "operations": [ ... ] }` array envelope.
+5. **Strict Fidelity Between Pedagogical Text and JSON Patches:**
+   The AI assistant must NEVER state in conversational text that it populated or modified columns/blocks if those changes are not 100% serialized in the emitted `<!--PLANNING_PATCH: ... -->` payload. Promising updates in text while omitting them from the patch is strictly prohibited.

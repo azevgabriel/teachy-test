@@ -89,32 +89,36 @@ flowchart TD
 
 ---
 
-## 3. Recursive Tree Reorganization (`REORGANIZE_TREE`)
-* **Teacher Command:** *"Group the lessons by week, but keep every single day detailed"*.
+## 3. Recursive Tree Reorganization & Subdivision (`REORGANIZE_TREE`)
+* **Teacher Command:** 
+  - Bottom-Up Grouping: *"Group the lessons by week, but keep every single day detailed"*.
+  - Top-Down Subdivision: *"Subdivide the months into weeks; I want trimester -> month -> week"*.
 * **AI Behavior:**
-  - Creates new parent `PlanningBlock` records with `granularity = WEEKLY` (e.g. Week 1, Week 2).
-  - Reassigns the `parentId` of existing daily blocks (`granularity = DAILY`) to their matching weekly parent block based on date windows.
+  - **Bottom-Up Grouping (`GROUP`):** Creates new parent `PlanningBlock` records with `granularity = WEEKLY` (e.g. Week 1, Week 2) and reassigns the `parentId` of existing daily blocks (`granularity = DAILY`) based on calendar dates.
+  - **Top-Down Subdivision (`SUBDIVIDE`):** Subdivides each monthly block into 4 weekly blocks across the month's business days.
+  - **Idempotency Invariant:** If partial weeks already exist (e.g. Week 1 was generated earlier), the use case does not abort or duplicate. It verifies grid completeness (`order >= 4`), preserves existing weeks with their IDs, methodologies, and metadata intact, and creates only the missing weeks (weeks 2, 3, 4).
 * **Prisma Operation:**
   ```typescript
-  // 1. Create parent weekly block
-  const weekBlock = await prisma.planningBlock.create({
-    data: {
-      planningId,
-      granularity: 'WEEKLY',
-      startAt: weekStart,
-      endAt: weekEnd,
-      order: 1,
-    },
+  // Subdivide month into 4 weeks idempotently:
+  const existingWeeks = await prisma.planningBlock.findMany({
+    where: { parentId: monthBlock.id, granularity: 'WEEKLY' },
   });
-  // 2. Re-parent matching daily child blocks
-  await prisma.planningBlock.updateMany({
-    where: {
-      planningId,
-      granularity: 'DAILY',
-      startAt: { gte: weekStart, lte: weekEnd },
-    },
-    data: { parentId: weekBlock.id },
-  });
+  // Completes missing weeks up to 4 preserving existing items:
+  for (let order = 1; order <= 4; order++) {
+    const existing = existingWeeks.find((w) => w.order === order);
+    if (!existing) {
+      await prisma.planningBlock.create({
+        data: {
+          planningId,
+          parentId: monthBlock.id,
+          granularity: 'WEEKLY',
+          startAt: calcWeekStart(monthBlock.startAt, order),
+          endAt: calcWeekEnd(monthBlock.startAt, order),
+          order,
+        },
+      });
+    }
+  }
   ```
 
 ---
@@ -221,14 +225,49 @@ flowchart TD
 
 ---
 
-## 10. Natural Language $\leftrightarrow$ Schema Mapping Dictionary
+## 10. Multi-Column Metadata & Methodology Filling (`FILL_METADATA`)
+* **Teacher Command:** 
+  - Single Column: *"Preencha a coluna de recursos para todas as semanas"* or *"Adicione a metodologia da semana 1"*.
+  - Multi-Column Batch: *"Preencha todas as colunas que faltam (Recursos, Transposição Pastoral e DUA) para as semanas pendentes"*.
+* **AI Behavior:**
+  - **Leaf Node Priority:** In multi-tiered plans, resolves targeting to leaf blocks (`WEEKLY` or `DAILY`), avoiding naive `order: 1` match on ancestor month blocks. Precedence: `blockId` > `parentId` + `order` > `granularity` + `date`.
+  - **Multi-Column Support:** Supports passing `colName` per item in `values` (`{ blockId, colName, textValue }`), updating multiple specifications in a single operation.
+  - **Anti-Duplication for Methodology:** If `colName === 'metodologia'`, writes directly to `planningBlock.metodologia` and deletes any duplicate EAV rows in `planning_metadata_values`.
+  - **Strict Fidelity Invariant:** The AI must only claim in conversational text that it filled columns if all values are fully serialized within the JSON patch.
+* **Prisma Operation:**
+  ```typescript
+  // 1. Physical methodology:
+  if (isMetodologia && blockId) {
+    await prisma.planningBlock.update({
+      where: { id: blockId },
+      data: { metodologia: textValue },
+    });
+    await prisma.planningMetadataValue.deleteMany({
+      where: { specificationId: spec.id, planningBlockId: blockId },
+    });
+  }
+  // 2. EAV Custom metadata:
+  else if (blockId) {
+    await prisma.planningMetadataValue.upsert({
+      where: { /* specificationId + planningBlockId */ },
+      create: { specificationId: spec.id, planningBlockId: blockId, textValue },
+      update: { textValue },
+    });
+  }
+  ```
+
+---
+
+## 11. Natural Language $\leftrightarrow$ Schema Mapping Dictionary
 
 | Teacher Conversational Expression | Schema Target | Scope / Table | Primary Operation | Anti-Duplication Rule |
 | :--- | :--- | :--- | :--- | :--- |
 | *"No cabeçalho"*, *"No topo"*, *"No ciclo"* | `Planning` | Macro Header (`PLANNING`) | `UPSERT_PLANNING` / `ADD_SPECIFICATION` | Direct macro properties; never attach to blocks. |
 | *"Disciplina"*, *"Matéria"*, *"Componente"* | `Planning.curricularComponents` | Macro Header (`PLANNING`) | `UPSERT_PLANNING.curricularComponentNames` | Override `colName: "curricularComponents"`; **never** create `colName: "disciplina"` in EAV. |
 | *"Avaliação no cabeçalho"* | `Planning.evaluations` | Macro Header (`PLANNING`) | `UPSERT_PLANNING.evaluations` | XOR constraint: `planning_id IS NOT NULL`. |
-| *"Sequência didática"*, *"Metodologia"* | `PlanningBlock.metodologia` | Blocks (`PLANNING_BLOCK`) | `UPDATE_BLOCK_BY_DATE` / `BATCH_UPDATE_COLUMN` | Override `colName: "metodologia"`; persist text in physical column. |
+| *"Sequência didática"*, *"Metodologia"* | `PlanningBlock.metodologia` | Blocks (`PLANNING_BLOCK`) | `UPDATE_BLOCK_BY_DATE` / `FILL_METADATA` | Override `colName: "metodologia"`; persist text in physical column. |
+| *"Preencher colunas customizadas"* | `PlanningMetadataValue` | Blocks (`PLANNING_BLOCK`) | `FILL_METADATA` (multi-colunas) | Resolves leaf nodes via `blockId` / `order` + `parentId`. |
+| *"Subdividir mês em semanas"* | `PlanningBlock` | Blocks (`PLANNING_BLOCK`) | `REORGANIZE_TREE` (`SUBDIVIDE`) | Idempotent: completes 4 weeks, preserving existing weeks and metadata. |
 | *"Remover habilidades do cabeçalho"* | `Planning.learningObjectives` | Macro Header (`PLANNING`) | `UPSERT_PLANNING` with `bnccCodes: []` | Deletes only `where: { planningId: id }`; preserves daily block skills. |
 | *"Exibir só o valor, sem rótulo"* | `Specification.showLabel` | Either | `ADD_SPECIFICATION` (`showLabel: false`) | Renders raw value without card title. |
 | *"Ocultar coluna/seção"* | `Specification.isVisible` | Either | `ADD_SPECIFICATION` (`isVisible: false`) | Suppresses rendering without deleting persisted data. |
