@@ -1,5 +1,13 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Calendar, PanelRight, Sparkles, UploadCloud, X } from "lucide-react";
+import {
+	Calendar,
+	FolderOpen,
+	PanelRight,
+	Paperclip,
+	Sparkles,
+	UploadCloud,
+	X,
+} from "lucide-react";
 import * as React from "react";
 import { formatGranularity } from "#/components/planning/PlanningHeader";
 import { PlanningViewer } from "#/components/planning/PlanningViewer";
@@ -14,6 +22,7 @@ import { Sidebar } from "./Sidebar";
 import {
 	type Message,
 	type PendingAttachment,
+	type ReferenceDocumentItem,
 	type SessionSummary,
 	validateUploadFile,
 } from "./types";
@@ -80,6 +89,9 @@ export function ChatContainer({
 		React.useState<PendingAttachment | null>(null);
 	const [savedDocumentsOpen, setSavedDocumentsOpen] = React.useState(false);
 	const [uploadError, setUploadError] = React.useState<string | null>(null);
+	const [activeLinkedDocuments, setActiveLinkedDocuments] = React.useState<
+		ReferenceDocumentItem[]
+	>([]);
 	const dragCounterRef = React.useRef(0);
 	const firstMessageSentRef = React.useRef<string | null>(null);
 
@@ -96,6 +108,46 @@ export function ChatContainer({
 		error: planningError,
 		refetch: refetchPlanning,
 	} = usePlanningSync({ sessionId: activeSessionId });
+
+	const fetchSessionDocuments = React.useCallback(async (sId: string) => {
+		try {
+			const res = await fetch(
+				`/api/sessions/${encodeURIComponent(sId)}/documents`,
+			);
+			if (res.ok) {
+				const data: ReferenceDocumentItem[] = await res.json();
+				setActiveLinkedDocuments(data);
+			}
+		} catch (err) {
+			console.error("Erro ao carregar documentos vinculados:", err);
+		}
+	}, []);
+
+	React.useEffect(() => {
+		if (activeSessionId) {
+			fetchSessionDocuments(activeSessionId);
+		} else {
+			setActiveLinkedDocuments([]);
+		}
+	}, [activeSessionId, fetchSessionDocuments]);
+
+	const handleDocumentLinked = React.useCallback(
+		(doc: ReferenceDocumentItem) => {
+			setActiveLinkedDocuments((prev) => {
+				if (prev.some((d) => d.id === doc.id)) return prev;
+				return [...prev, doc];
+			});
+		},
+		[],
+	);
+
+	const handleDocumentUnlinked = React.useCallback((docId: string) => {
+		setActiveLinkedDocuments((prev) => prev.filter((d) => d.id !== docId));
+	}, []);
+
+	const handleDocumentDeleted = React.useCallback((docId: string) => {
+		setActiveLinkedDocuments((prev) => prev.filter((d) => d.id !== docId));
+	}, []);
 
 	// Busca a lista de sessões para a barra lateral de histórico
 	const fetchSessions = React.useCallback(async () => {
@@ -125,8 +177,9 @@ export function ChatContainer({
 			setActiveSessionId(newSessionId);
 			fetchSessions();
 			refetchPlanning(newSessionId);
+			fetchSessionDocuments(newSessionId);
 		},
-		[fetchSessions, refetchPlanning],
+		[fetchSessions, refetchPlanning, fetchSessionDocuments],
 	);
 
 	const handleMessageSaved = React.useCallback(() => {
@@ -419,18 +472,75 @@ export function ChatContainer({
 											<span>{activeDateRange}</span>
 										</div>
 									)}
+									{activeLinkedDocuments.length > 0 && (
+										<button
+											type="button"
+											onClick={() => setSavedDocumentsOpen(true)}
+											data-testid="header-active-documents-badge"
+											className="flex items-center gap-1 text-[10px] h-4.5 px-2 py-0 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
+											title="Documentos de referência vinculados a esta sessão. Clique para gerenciar."
+										>
+											<Paperclip className="h-2.5 w-2.5 shrink-0" />
+											<span className="font-medium">
+												{activeLinkedDocuments.length}{" "}
+												{activeLinkedDocuments.length === 1
+													? "documento de apoio"
+													: "documentos de apoio"}
+											</span>
+										</button>
+									)}
 								</div>
 							) : (
-								<p className="text-[11px] text-slate-400">
-									{activeSessionId
-										? "Janela de contexto ativa • Em definição"
-										: "Inicie uma nova sessão"}
-								</p>
+								<div className="flex items-center gap-2 mt-0.5">
+									<p className="text-[11px] text-slate-400">
+										{activeSessionId
+											? "Janela de contexto ativa • Em definição"
+											: "Inicie uma nova sessão"}
+									</p>
+									{activeLinkedDocuments.length > 0 && (
+										<button
+											type="button"
+											onClick={() => setSavedDocumentsOpen(true)}
+											data-testid="header-active-documents-badge"
+											className="flex items-center gap-1 text-[10px] h-4.5 px-2 py-0 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
+											title="Documentos de referência vinculados a esta sessão. Clique para gerenciar."
+										>
+											<Paperclip className="h-2.5 w-2.5 shrink-0" />
+											<span className="font-medium">
+												{activeLinkedDocuments.length}{" "}
+												{activeLinkedDocuments.length === 1
+													? "documento de apoio"
+													: "documentos de apoio"}
+											</span>
+										</button>
+									)}
+								</div>
 							)}
 						</div>
 					</div>
 
 					<div className="flex items-center gap-1.5">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => setSavedDocumentsOpen(true)}
+							data-testid="header-materials-button"
+							title="Documentos de referência e materiais de apoio"
+							className="gap-1.5 text-xs h-8 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400"
+						>
+							<FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+							<span className="hidden sm:inline">Materiais</span>
+							{activeLinkedDocuments.length > 0 && (
+								<Badge
+									variant="secondary"
+									data-testid="header-materials-count-badge"
+									className="ml-0.5 px-1.5 py-0 text-[10px] h-4 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+								>
+									{activeLinkedDocuments.length}
+								</Badge>
+							)}
+						</Button>
 						{!sidebarOpen && (
 							<Button
 								variant="outline"
@@ -543,6 +653,9 @@ export function ChatContainer({
 						mimeType: doc.mimeType,
 					});
 				}}
+				onDocumentLinked={handleDocumentLinked}
+				onDocumentUnlinked={handleDocumentUnlinked}
+				onDocumentDeleted={handleDocumentDeleted}
 			/>
 
 			{/* Barra Lateral de Histórico de Conversas Retrátil */}
@@ -555,6 +668,7 @@ export function ChatContainer({
 				onNewChat={handleNewChat}
 				onRenameSession={handleRenameSession}
 				onDeleteSession={handleDeleteSession}
+				onOpenDocumentsDrawer={() => setSavedDocumentsOpen(true)}
 			/>
 		</div>
 	);
