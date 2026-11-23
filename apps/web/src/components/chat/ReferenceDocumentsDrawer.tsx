@@ -430,49 +430,44 @@ export function ReferenceDocumentsDrawer({
 										)}
 
 										{/* Vínculo Multi-sessão em 1 Clique */}
-										{sessionId && (
-											<>
-												{doc.isLinkedToSession ? (
-													<Button
-														type="button"
-														variant="outline"
-														size="sm"
-														onClick={() => handleUnlink(doc)}
-														disabled={actionLoadingId === doc.id}
-														data-testid={`unlink-btn-${doc.id}`}
-														title="Desvincular desta sessão (continua salvo no repositório global)"
-														className="gap-1 text-xs h-8 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-													>
-														{actionLoadingId === doc.id ? (
-															<Loader2 className="h-3.5 w-3.5 animate-spin" />
-														) : (
-															<Unlink2 className="h-3.5 w-3.5" />
-														)}
-														<span className="hidden sm:inline">
-															Desvincular
-														</span>
-													</Button>
-												) : (
-													<Button
-														type="button"
-														variant="outline"
-														size="sm"
-														onClick={() => handleLink(doc)}
-														disabled={actionLoadingId === doc.id}
-														data-testid={`link-btn-${doc.id}`}
-														title="Vincular à sessão ativa com 1 clique"
-														className="gap-1 text-xs h-8 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-													>
-														{actionLoadingId === doc.id ? (
-															<Loader2 className="h-3.5 w-3.5 animate-spin" />
-														) : (
-															<Link2 className="h-3.5 w-3.5" />
-														)}
-														<span className="hidden sm:inline">Vincular</span>
-													</Button>
-												)}
-											</>
-										)}
+										{sessionId &&
+											(doc.isLinkedToSession ? (
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													onClick={() => handleUnlink(doc)}
+													disabled={actionLoadingId === doc.id}
+													data-testid={`unlink-btn-${doc.id}`}
+													title="Desvincular desta sessão (continua salvo no repositório global)"
+													className="gap-1 text-xs h-8 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+												>
+													{actionLoadingId === doc.id ? (
+														<Loader2 className="h-3.5 w-3.5 animate-spin" />
+													) : (
+														<Unlink2 className="h-3.5 w-3.5" />
+													)}
+													<span className="hidden sm:inline">Desvincular</span>
+												</Button>
+											) : (
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													onClick={() => handleLink(doc)}
+													disabled={actionLoadingId === doc.id}
+													data-testid={`link-btn-${doc.id}`}
+													title="Vincular à sessão ativa com 1 clique"
+													className="gap-1 text-xs h-8 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+												>
+													{actionLoadingId === doc.id ? (
+														<Loader2 className="h-3.5 w-3.5 animate-spin" />
+													) : (
+														<Link2 className="h-3.5 w-3.5" />
+													)}
+													<span className="hidden sm:inline">Vincular</span>
+												</Button>
+											))}
 
 										{/* Anexar ao Chat Input */}
 										<Button

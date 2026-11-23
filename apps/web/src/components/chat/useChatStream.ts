@@ -5,12 +5,14 @@ interface UseChatStreamOptions {
 	initialMessages?: Message[];
 	onSessionCreated?: (sessionId: string) => void;
 	onMessageSaved?: (message: Message) => void;
+	onAttachmentLinked?: (sessionId: string) => void;
 }
 
 export function useChatStream({
 	initialMessages = [],
 	onSessionCreated,
 	onMessageSaved,
+	onAttachmentLinked,
 }: UseChatStreamOptions = {}) {
 	const [messages, setMessages] = React.useState<Message[]>(initialMessages);
 	const [partialText, setPartialText] = React.useState("");
@@ -128,6 +130,7 @@ export function useChatStream({
 							url: `/api/documents/${attachment.documentId}/download`,
 						};
 					}
+					onAttachmentLinked?.(currentSessionId);
 				}
 
 				// Adiciona otimisticamente a mensagem do usuário na tela com anexo
@@ -298,7 +301,7 @@ export function useChatStream({
 				abortControllerRef.current = null;
 			}
 		},
-		[onSessionCreated, onMessageSaved],
+		[onSessionCreated, onMessageSaved, onAttachmentLinked],
 	);
 
 	return {

@@ -137,17 +137,32 @@ export function ChatContainer({
 				if (prev.some((d) => d.id === doc.id)) return prev;
 				return [...prev, doc];
 			});
+			if (activeSessionId) {
+				fetchSessionDocuments(activeSessionId);
+			}
 		},
-		[],
+		[activeSessionId, fetchSessionDocuments],
 	);
 
-	const handleDocumentUnlinked = React.useCallback((docId: string) => {
-		setActiveLinkedDocuments((prev) => prev.filter((d) => d.id !== docId));
-	}, []);
+	const handleDocumentUnlinked = React.useCallback(
+		(docId: string) => {
+			setActiveLinkedDocuments((prev) => prev.filter((d) => d.id !== docId));
+			if (activeSessionId) {
+				fetchSessionDocuments(activeSessionId);
+			}
+		},
+		[activeSessionId, fetchSessionDocuments],
+	);
 
-	const handleDocumentDeleted = React.useCallback((docId: string) => {
-		setActiveLinkedDocuments((prev) => prev.filter((d) => d.id !== docId));
-	}, []);
+	const handleDocumentDeleted = React.useCallback(
+		(docId: string) => {
+			setActiveLinkedDocuments((prev) => prev.filter((d) => d.id !== docId));
+			if (activeSessionId) {
+				fetchSessionDocuments(activeSessionId);
+			}
+		},
+		[activeSessionId, fetchSessionDocuments],
+	);
 
 	// Busca a lista de sessões para a barra lateral de histórico
 	const fetchSessions = React.useCallback(async () => {
@@ -186,14 +201,16 @@ export function ChatContainer({
 		fetchSessions();
 		if (activeSessionId) {
 			refetchPlanning(activeSessionId);
+			fetchSessionDocuments(activeSessionId);
 		}
-	}, [fetchSessions, activeSessionId, refetchPlanning]);
+	}, [fetchSessions, activeSessionId, refetchPlanning, fetchSessionDocuments]);
 
 	const { messages, partialText, isStreaming, error, sendMessage, stopStream } =
 		useChatStream({
 			initialMessages,
 			onSessionCreated: handleSessionCreated,
 			onMessageSaved: handleMessageSaved,
+			onAttachmentLinked: (sId) => fetchSessionDocuments(sId),
 		});
 
 	// Se a rota foi acessada com mensagem inicial no query params, inicia o streaming agora que já estamos no contexto da rota /chat/:sessionId
@@ -254,6 +271,9 @@ export function ChatContainer({
 			setActiveSessionTitle("Nova Conversa");
 		}
 		sendMessage(activeSessionId ?? null, text, attachment);
+		if (attachment && activeSessionId) {
+			fetchSessionDocuments(activeSessionId);
+		}
 	};
 
 	const handleDragEnter = (e: React.DragEvent) => {
@@ -531,15 +551,18 @@ export function ChatContainer({
 						>
 							<FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
 							<span className="hidden sm:inline">Materiais</span>
-							{activeLinkedDocuments.length > 0 && (
-								<Badge
-									variant="secondary"
-									data-testid="header-materials-count-badge"
-									className="ml-0.5 px-1.5 py-0 text-[10px] h-4 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-								>
-									{activeLinkedDocuments.length}
-								</Badge>
-							)}
+							<Badge
+								variant="secondary"
+								data-testid="header-materials-count-badge"
+								className={cn(
+									"ml-0.5 px-1.5 py-0 text-[10px] h-4",
+									activeLinkedDocuments.length > 0
+										? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-semibold"
+										: "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-normal",
+								)}
+							>
+								{activeLinkedDocuments.length}
+							</Badge>
 						</Button>
 						{!sidebarOpen && (
 							<Button
@@ -643,7 +666,12 @@ export function ChatContainer({
 			{/* Modal / Drawer de Documentos Salvos */}
 			<ReferenceDocumentsDrawer
 				isOpen={savedDocumentsOpen}
-				onClose={() => setSavedDocumentsOpen(false)}
+				onClose={() => {
+					setSavedDocumentsOpen(false);
+					if (activeSessionId) {
+						fetchSessionDocuments(activeSessionId);
+					}
+				}}
 				sessionId={activeSessionId}
 				onSelectDocument={(doc) => {
 					setPendingAttachment({
