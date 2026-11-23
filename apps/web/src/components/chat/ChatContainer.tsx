@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Calendar, PanelRight, Sparkles } from "lucide-react";
+import { Calendar, PanelRight, Sparkles, UploadCloud, X } from "lucide-react";
 import * as React from "react";
 import { formatGranularity } from "#/components/planning/PlanningHeader";
 import { PlanningViewer } from "#/components/planning/PlanningViewer";
@@ -9,8 +9,14 @@ import { Button } from "#/components/ui/button";
 import { cn } from "#/lib/utils";
 import { ChatInput } from "./ChatInput";
 import { ChatTimeline } from "./ChatTimeline";
+import { ReferenceDocumentsDrawer } from "./ReferenceDocumentsDrawer";
 import { Sidebar } from "./Sidebar";
-import type { Message, SessionSummary } from "./types";
+import {
+	type Message,
+	type PendingAttachment,
+	type SessionSummary,
+	validateUploadFile,
+} from "./types";
 import { useChatStream } from "./useChatStream";
 
 function formatPlanningDateRange(
@@ -69,6 +75,12 @@ export function ChatContainer({
 	const [planningOpen, setPlanningOpen] = React.useState(false); // Pré-visualização fechada por padrão
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [inputValue, setInputValue] = React.useState("");
+	const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+	const [pendingAttachment, setPendingAttachment] =
+		React.useState<PendingAttachment | null>(null);
+	const [savedDocumentsOpen, setSavedDocumentsOpen] = React.useState(false);
+	const [uploadError, setUploadError] = React.useState<string | null>(null);
+	const dragCounterRef = React.useRef(0);
 	const firstMessageSentRef = React.useRef<string | null>(null);
 
 	// Atualiza os estados locais se a prop mudar (ao trocar de sessão)
@@ -150,14 +162,17 @@ export function ChatContainer({
 		}
 	}, [pendingFirstMessage, activeSessionId, sendMessage, navigate]);
 
-	const handleSend = async (text: string) => {
-		// Se estiver na tela inicial (sem sessão criada ainda), cria a sessão primeiro e navega com a mensagem no query param
+	const handleSend = async (text: string, attachment?: PendingAttachment) => {
+		// Se estiver na tela inicial (sem sessão criada ainda), cria a sessão primeiro
 		if (!activeSessionId) {
 			try {
+				const sessionName =
+					text.trim().slice(0, 30) ||
+					(attachment ? attachment.name.slice(0, 30) : "Nova Conversa");
 				const createRes = await fetch("/api/sessions", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name: "Nova Conversa" }),
+					body: JSON.stringify({ name: sessionName }),
 				});
 
 				if (!createRes.ok) {
@@ -165,11 +180,16 @@ export function ChatContainer({
 				}
 
 				const newSession = await createRes.json();
-				// Navega para o contexto da sessão levando a mensagem nos query params
+				setActiveSessionId(newSession.id);
+				setActiveSessionTitle(newSession.name);
+
+				// Se há anexo ou mensagem, envia na nova sessão criada
+				await sendMessage(newSession.id, text, attachment);
 				navigate({
 					to: "/chat/$sessionId",
 					params: { sessionId: newSession.id },
-					search: { message: text },
+					search: {},
+					replace: true,
 				});
 				return;
 			} catch (err) {
@@ -180,7 +200,63 @@ export function ChatContainer({
 		if (!activeSessionTitle) {
 			setActiveSessionTitle("Nova Conversa");
 		}
-		sendMessage(activeSessionId ?? null, text);
+		sendMessage(activeSessionId ?? null, text, attachment);
+	};
+
+	const handleDragEnter = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounterRef.current += 1;
+		if (
+			e.dataTransfer.types &&
+			Array.from(e.dataTransfer.types).includes("Files")
+		) {
+			setIsDraggingOver(true);
+		}
+	};
+
+	const handleDragOver = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		e.dataTransfer.dropEffect = "copy";
+	};
+
+	const handleDragLeave = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounterRef.current -= 1;
+		if (dragCounterRef.current <= 0) {
+			dragCounterRef.current = 0;
+			setIsDraggingOver(false);
+		}
+	};
+
+	const handleDrop = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounterRef.current = 0;
+		setIsDraggingOver(false);
+
+		const files = Array.from(e.dataTransfer.files);
+		if (files.length === 0) return;
+
+		const file = files[0];
+		const validation = validateUploadFile(file);
+		if (!validation.valid) {
+			setUploadError(validation.error || "Arquivo inválido");
+			return;
+		}
+
+		setUploadError(null);
+		setPendingAttachment({
+			file,
+			name: file.name,
+			size: file.size,
+			mimeType: file.type || "application/octet-stream",
+			previewUrl: file.type.startsWith("image/")
+				? URL.createObjectURL(file)
+				: undefined,
+		});
 	};
 
 	const handleCopyMessage = React.useCallback((text: string) => {
@@ -264,13 +340,35 @@ export function ChatContainer({
 
 			{/* Área Central / Direita: Chat com Assistente */}
 			<main
+				onDragEnter={handleDragEnter}
+				onDragOver={handleDragOver}
+				onDragLeave={handleDragLeave}
+				onDrop={handleDrop}
 				className={cn(
-					"flex flex-col h-full min-w-0 transition-all duration-300",
+					"relative flex flex-col h-full min-w-0 transition-all duration-300",
 					planningOpen
 						? "w-full md:w-1/2 lg:w-[48%] xl:w-[44%] shrink-0"
 						: "w-full flex-1",
 				)}
 			>
+				{/* Dropzone Visual Overlay quando arrasta arquivo sobre o chat */}
+				{isDraggingOver && (
+					<div
+						data-testid="dropzone-overlay"
+						className="absolute inset-4 z-50 flex flex-col items-center justify-center bg-emerald-50/95 dark:bg-slate-900/95 border-3 border-dashed border-emerald-500 dark:border-emerald-400 rounded-2xl shadow-2xl pointer-events-none transition-all animate-in fade-in zoom-in-95"
+					>
+						<div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 shadow-inner">
+							<UploadCloud className="h-8 w-8 animate-bounce" />
+						</div>
+						<h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+							Solte o arquivo para anexar à conversa
+						</h3>
+						<p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+							Formatos suportados: PDF, DOCX, PNG, JPEG, WebP (até 20MB)
+						</p>
+					</div>
+				)}
+
 				{/* Top Bar do Chat */}
 				<header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xs shrink-0">
 					<div className="flex items-center gap-2.5 truncate">
@@ -354,6 +452,22 @@ export function ChatContainer({
 					</div>
 				)}
 
+				{/* Notificação de Erro de Upload */}
+				{uploadError && (
+					<div className="bg-red-50 dark:bg-red-950/50 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs px-4 py-2 flex items-center justify-between animate-in fade-in">
+						<span>{uploadError}</span>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							onClick={() => setUploadError(null)}
+							className="h-5 w-5 text-red-500 hover:text-red-700 hover:bg-transparent"
+						>
+							<X className="h-3 w-3" />
+						</Button>
+					</div>
+				)}
+
 				{/* Timeline ou Estado Inicial Vazio */}
 				{messages.length === 0 && !isStreaming ? (
 					<div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-slate-50/50 dark:bg-slate-950/20">
@@ -409,8 +523,27 @@ export function ChatContainer({
 					onValueChange={setInputValue}
 					onSend={handleSend}
 					onStop={stopStream}
+					pendingAttachment={pendingAttachment}
+					onPendingAttachmentChange={setPendingAttachment}
+					onOpenSavedDocuments={() => setSavedDocumentsOpen(true)}
+					onError={(msg) => setUploadError(msg)}
 				/>
 			</main>
+
+			{/* Modal / Drawer de Documentos Salvos */}
+			<ReferenceDocumentsDrawer
+				isOpen={savedDocumentsOpen}
+				onClose={() => setSavedDocumentsOpen(false)}
+				sessionId={activeSessionId}
+				onSelectDocument={(doc) => {
+					setPendingAttachment({
+						documentId: doc.id,
+						name: doc.originalName,
+						size: doc.fileSize,
+						mimeType: doc.mimeType,
+					});
+				}}
+			/>
 
 			{/* Barra Lateral de Histórico de Conversas Retrátil */}
 			<Sidebar

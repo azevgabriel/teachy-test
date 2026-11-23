@@ -6,6 +6,7 @@ import { BadRequestException } from '@nestjs/common';
 describe('ChatController', () => {
   let controller: ChatController;
   let chatServiceMock: any;
+  let documentsServiceMock: any;
 
   beforeEach(() => {
     chatServiceMock = {
@@ -17,7 +18,14 @@ describe('ChatController', () => {
       processMessageStream: vi.fn(),
     };
 
-    controller = new ChatController(chatServiceMock as unknown as ChatService);
+    documentsServiceMock = {
+      uploadDocument: vi.fn(),
+    };
+
+    controller = new ChatController(
+      chatServiceMock as unknown as ChatService,
+      documentsServiceMock as any,
+    );
   });
 
   describe('listSessions', () => {
@@ -73,6 +81,23 @@ describe('ChatController', () => {
       const res = await controller.deleteSession('s1');
       expect(chatServiceMock.deleteSession).toHaveBeenCalledWith('s1');
       expect(res).toEqual({ success: true });
+    });
+  });
+
+  describe('uploadAttachment', () => {
+    it('delegates upload to documentsService with sessionId', async () => {
+      const file = { originalname: 'arquivo.pdf' };
+      documentsServiceMock.uploadDocument.mockResolvedValue({ id: 'att-1' });
+
+      const res = await controller.uploadAttachment('s1', file);
+      expect(documentsServiceMock.uploadDocument).toHaveBeenCalledWith(file, 's1');
+      expect(res).toEqual({ id: 'att-1' });
+    });
+
+    it('throws BadRequestException when file is missing', async () => {
+      await expect(controller.uploadAttachment('s1', null)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

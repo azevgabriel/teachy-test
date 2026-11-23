@@ -106,3 +106,65 @@ test("ChatTimeline: renderiza ExportActionCard quando a mensagem da IA possui co
 	assert.ok(markup.includes("PDF"));
 	assert.ok(markup.includes("Retrato"));
 });
+
+test("ChatTimeline: renderiza anexo no balão da mensagem do usuário com card, nome, tamanho e download", () => {
+	const messagesWithAttachment: Message[] = [
+		{
+			id: "msg-user-with-att",
+			sessionId: "sess-1",
+			type: "USER",
+			interrupted: false,
+			text: "Monte a aula com base nesta diretriz escolar.",
+			createdAt: "2026-03-01T10:10:00Z",
+			attachment: {
+				id: "doc-att-1",
+				name: "diretriz-pedagogica.pdf",
+				size: 1024 * 500,
+				mimeType: "application/pdf",
+				url: "/api/documents/doc-att-1/download",
+			},
+		},
+	];
+
+	const markup = renderToStaticMarkup(
+		<ChatTimeline messages={messagesWithAttachment} sessionId="sess-1" />,
+	);
+
+	assert.ok(markup.includes('data-testid="message-attachment-card"'));
+	assert.ok(markup.includes("diretriz-pedagogica.pdf"));
+	assert.ok(markup.includes("500 KB"));
+	assert.ok(markup.includes('href="/api/documents/doc-att-1/download"'));
+	assert.ok(markup.includes("Monte a aula com base nesta diretriz"));
+});
+
+test("ChatTimeline: renderiza anexo quando armazenado dentro de commands.attachment", () => {
+	const messagesWithCommandsAttachment: Message[] = [
+		{
+			id: "msg-user-commands-att",
+			sessionId: "sess-1",
+			type: "USER",
+			interrupted: false,
+			text: "Segue o cronograma da escola.",
+			createdAt: "2026-03-01T10:12:00Z",
+			commands: {
+				attachment: {
+					name: "cronograma.docx",
+					size: 1024 * 250,
+					mimeType:
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+				},
+			},
+		},
+	];
+
+	const markup = renderToStaticMarkup(
+		<ChatTimeline
+			messages={messagesWithCommandsAttachment}
+			sessionId="sess-1"
+		/>,
+	);
+
+	assert.ok(markup.includes('data-testid="message-attachment-card"'));
+	assert.ok(markup.includes("cronograma.docx"));
+	assert.ok(markup.includes("250 KB"));
+});

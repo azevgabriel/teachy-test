@@ -1,5 +1,5 @@
 import * as React from "react";
-import type { Message } from "./types";
+import type { Message, MessageAttachment, PendingAttachment } from "./types";
 
 interface UseChatStreamOptions {
 	initialMessages?: Message[];
@@ -44,6 +44,7 @@ export function useChatStream({
 		async (
 			sessionId: string | null | undefined,
 			text: string,
+			attachment?: PendingAttachment,
 		): Promise<string | null> => {
 			setError(null);
 			const controller = new AbortController();
@@ -58,10 +59,13 @@ export function useChatStream({
 			try {
 				// 1. Se ainda não há sessão (página inicial vazia), cria uma nova sessão
 				if (!currentSessionId) {
+					const sessionName =
+						text.trim().slice(0, 30) ||
+						(attachment ? attachment.name.slice(0, 30) : "Nova Conversa");
 					const createRes = await fetch("/api/sessions", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ name: text.slice(0, 30) }),
+						body: JSON.stringify({ name: sessionName }),
 						signal: controller.signal,
 					});
 
@@ -80,7 +84,53 @@ export function useChatStream({
 
 				currentSessionIdRef.current = currentSessionId;
 
-				// Adiciona otimisticamente a mensagem do usuário na tela
+				// Processamento do anexo se fornecido
+				let attachmentPayload: MessageAttachment | undefined;
+				if (attachment) {
+					if (attachment.file) {
+						const formData = new FormData();
+						formData.append("file", attachment.file);
+						const uploadRes = await fetch(
+							`/api/sessions/${currentSessionId}/attachments`,
+							{
+								method: "POST",
+								body: formData,
+								signal: controller.signal,
+							},
+						);
+
+						if (!uploadRes.ok) {
+							throw new Error("Falha ao enviar arquivo anexado.");
+						}
+
+						const uploadedData = await uploadRes.json();
+						attachmentPayload = {
+							id: uploadedData.id,
+							name: uploadedData.originalName || attachment.name,
+							size: uploadedData.fileSize || attachment.size,
+							mimeType: uploadedData.mimeType || attachment.mimeType,
+							url: uploadedData.url,
+						};
+					} else if (attachment.documentId) {
+						await fetch(
+							`/api/sessions/${currentSessionId}/documents/${attachment.documentId}/link`,
+							{
+								method: "POST",
+								signal: controller.signal,
+							},
+						);
+
+						attachmentPayload = {
+							id: attachment.documentId,
+							name: attachment.name,
+							size: attachment.size,
+							mimeType: attachment.mimeType,
+							url: `/api/documents/${attachment.documentId}/download`,
+						};
+					}
+				}
+
+				// Adiciona otimisticamente a mensagem do usuário na tela com anexo
 				const optimisticUserMessage: Message = {
 					id: `temp-${Date.now()}`,
 					sessionId: currentSessionId,
@@ -88,6 +138,10 @@ export function useChatStream({
 					type: "USER",
 					interrupted: false,
 					createdAt: new Date().toISOString(),
+					attachment: attachmentPayload,
+					commands: attachmentPayload
+						? { attachment: attachmentPayload }
+						: undefined,
 				};
 				lastUserMessageIdRef.current = optimisticUserMessage.id;
 				setMessages((prev) => [...prev, optimisticUserMessage]);
@@ -98,7 +152,11 @@ export function useChatStream({
 					{
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ text }),
+						body: JSON.stringify({
+							text,
+							attachment: attachmentPayload,
+							documentId: attachment?.documentId,
+						}),
 						signal: controller.signal,
 					},
 				);
