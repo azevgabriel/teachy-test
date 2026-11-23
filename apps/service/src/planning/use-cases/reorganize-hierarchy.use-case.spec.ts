@@ -75,6 +75,47 @@ describe('ReorganizeHierarchyUseCase', () => {
       expect(createCalls[0][0].data.endAt.toISOString().slice(0, 10)).toBe('2026-08-07');
     });
 
+    it('completa semanas faltantes até 4 semanas quando o mês já possui apenas a Semana 1 cadastrada', async () => {
+      const monthBlock = {
+        id: 'month-1',
+        planningId: 'plan-1',
+        granularity: 'MONTHLY',
+        order: 1,
+        parentId: null,
+      };
+
+      const existingWeek1 = {
+        id: 'week-1',
+        planningId: 'plan-1',
+        parentId: 'month-1',
+        granularity: 'WEEKLY',
+        order: 1,
+      };
+
+      mockPrisma.planning.findFirst.mockResolvedValue({
+        id: 'plan-1',
+        sessionId: 'session-1',
+        blocks: [monthBlock, existingWeek1],
+      });
+
+      // Simula que Semana 4 não existe (alreadySubdivided = false)
+      mockPrisma.planningBlock.findFirst.mockImplementation((args: any) => {
+        if (args.where.order === 1) return Promise.resolve(existingWeek1);
+        return Promise.resolve(null);
+      });
+      mockPrisma.planningBlock.findMany.mockResolvedValue([]); // sem dias
+
+      await useCase.execute('session-1', {
+        parentGranularity: 'MONTHLY',
+        childGranularity: 'WEEKLY',
+      });
+
+      // Deve criar Semanas 2, 3 e 4 (3 chamadas a create)
+      expect(mockPrisma.planningBlock.create).toHaveBeenCalledTimes(3);
+      const ordersCreated = mockPrisma.planningBlock.create.mock.calls.map((c: any) => c[0].data.order);
+      expect(ordersCreated).toEqual([2, 3, 4]);
+    });
+
     it('subdivide mês agrupando filhos diários existentes em semanas e reparentando-os', async () => {
       const monthBlock = {
         id: 'month-1',

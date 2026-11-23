@@ -76,8 +76,17 @@ The `order: Int @default(0)` field guarantees deterministic ordering between sib
 - Multiple lessons occurring on the same date (e.g. Lesson 1, Lesson 2).
 - Non-dated lesson sequences (e.g. "Lesson 1 — Introduction", "Lesson 2 — Guided Practice").
 
-### Fixed Methodology Column
+### Fixed Methodology Column & Anti-Duplication Invariant
 The `metodologia: Text?` field is kept as a dedicated physical column in `planning_blocks` because it was present in 100% of validated pedagogical models under slight naming variations (*"Didactic Sequence"*, *"Methodology (P, O, A & Av)"*, *"Lesson Development"*).
+
+> [!IMPORTANT]
+> **Anti-Duplication Invariant for Methodology:**
+> When the AI emits a patch updating methodology (via `FILL_METADATA`, `UPSERT_PLANNING`, or `UPDATE_BLOCK_BY_DATE`), the value is written **strictly to the physical column `planning_blocks.metodologia`**. It must generate **zero rows** in `planning_metadata_values`. Use cases actively clean up any residual or duplicate EAV records (`deleteMany where specificationId = spec.id and planningBlockId = blockId`) to guarantee a single relational source of truth and prevent conflicting states in the frontend.
+
+### Leaf Node Priority in Hierarchical Trees
+In multi-level architectures (e.g. `TRIMESTER` $\rightarrow$ `MONTHLY` $\rightarrow$ `WEEKLY`), sibling blocks across different months frequently share the same ordinal `order: 1` or overlapping date intervals. To prevent mutations intended for a specific week from accidentally overwriting an ancestor month or trimester block:
+- **Leaf Node Resolution Precedence:** Resolvers prioritize leaf blocks (`children.length === 0`).
+- **Target Resolution Hierarchy:** `blockId` (exact) > `parentId` + `order` (local month scope) > `granularity` + `date` (temporal window within layer). Ancestor blocks are only targeted when `granularity` is explicitly specified.
 
 ---
 
@@ -163,6 +172,10 @@ CHECK (
 ```
 
 Persistence use cases and AI patch handlers must always populate exactly one of the foreign keys (`planning_id` or `planning_block_id`), never both and never neither.
+
+> [!WARNING]
+> **XOR Constraint Rejection Guard:**
+> When persisting block-level custom metadata (`tableRef: "PLANNING_BLOCK"`), if the target block cannot be unambiguously resolved from the tree, the operation **must abort the individual value insertion** and log a warning rather than inserting a `null` `planning_block_id`. Emitting `planning_block_id: null` when `planning_id` is also `null` immediately triggers a PostgreSQL check constraint violation (`chk_planning_metadata_value_xor_parent`), causing transaction rollback.
 
 ### Macro BNCC Isolation via XOR (`bnccCodes: []`)
 Because `learning_objectives` enforces the XOR constraint between `planning_id` and `planning_block_id`, macro cycle objectives and micro lesson objectives are strictly partitioned at the database level:

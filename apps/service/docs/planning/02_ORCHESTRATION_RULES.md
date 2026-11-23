@@ -175,3 +175,22 @@ Native relational entities (`curricularComponents`, `metodologia`, `evaluations`
 ### C. Visual Presentation Modifiers (`showLabel: false` and `order`)
 - **Label Suppression (`showLabel: false`):** Enables direct value rendering (e.g. showing `"2º Bimestre"` directly without the top `"Bimestre"` label).
 - **Deterministic Universal Ordering (`order: Int`):** Controls the sequence of macro header cards and daily table columns deterministically.
+
+---
+
+## 11. Dual-Output Alignment & Batch Mutation Invariants (Issue #38 Learnings)
+
+### A. Strict Pedagogical Text vs. Patch Payload Fidelity
+Under the Dual-Output protocol, the conversational Markdown and the structured patch envelope (`<!--PLANNING_PATCH: ... -->`) must remain in **100% mutual fidelity**:
+- The AI must **never assert in conversational text** that it populated, updated, or finalized blocks or custom columns if those updates are not completely serialized within the emitted patch payload.
+- Promising pedagogical updates in the chat (e.g. claiming that Teaching Resources, Pastoral Transposition, and DUA adaptations were filled for all weeks) while emitting a patch containing only one column creates immediate data inconsistency for the teacher.
+
+### B. Multi-Column & Multi-Operation Batch Support
+To prevent truncation and allow comprehensive multi-column updates in a single turn:
+1. **Multi-Column `FILL_METADATA`:** The `FILL_METADATA` schema supports specifying `colName` individually per item in the `values` array (`{ blockId, colName, textValue }`), enabling simultaneous updates to distinct columns (e.g. `recursos_espacos`, `transposicao_pastoral`, `estrategias_adaptativas`) across multiple blocks within a single operation.
+2. **Sequential Multi-Operations (`operations: [...]`):** When distinct operations must occur in tandem (e.g. adding a specification and immediately filling metadata across blocks), the envelope accepts a top-level `{ "operations": [ op1, op2, ... ] }` array, executed in deterministic order by the backend.
+
+### C. Idempotent Top-Down Subdivisions (`REORGANIZE_TREE`)
+When subdividing an intermediate block (e.g. dividing a monthly block into 4 weekly blocks):
+- The operation must verify whether child weeks already exist.
+- Instead of aborting if only a single week exists, it completes the full calendar grid (up to 4 weeks, checking `order >= 4`), **preserving existing child weeks, their unique IDs, methodologies, and metadata**, while generating only the missing weeks (weeks 2, 3, 4).

@@ -326,15 +326,26 @@ export class UpsertPlanningUseCase {
           }
         }
 
-        // Tenta encontrar bloco existente na data ou pela ordem
+        // Tenta encontrar bloco existente por ID, data ou pela ordem
         let existingBlock = null;
-        if (blockStart) {
+        if (b.id) {
+          existingBlock = await this.prisma.planningBlock.findFirst({
+            where: {
+              id: b.id,
+              planningId: planning.id,
+            },
+          });
+        }
+
+        if (!existingBlock && blockStart) {
           const nextDay = new Date(blockStart);
           nextDay.setUTCDate(nextDay.getUTCDate() + 1);
           existingBlock = await this.prisma.planningBlock.findFirst({
             where: {
               planningId: planning.id,
               startAt: { gte: blockStart, lt: nextDay },
+              ...(b.granularity ? { granularity: b.granularity } : {}),
+              ...(b.parentId ? { parentId: b.parentId } : {}),
             },
           });
         }
@@ -344,6 +355,8 @@ export class UpsertPlanningUseCase {
             where: {
               planningId: planning.id,
               order: blockOrder,
+              ...(b.granularity ? { granularity: b.granularity } : {}),
+              ...(b.parentId ? { parentId: b.parentId } : {}),
             },
           });
         }
@@ -429,6 +442,29 @@ export class UpsertPlanningUseCase {
         if (b.metadataValues && b.metadataValues.length > 0) {
           for (const meta of b.metadataValues) {
             const colName = meta.colName.toLowerCase().trim();
+
+            // Invariante Anti-Duplicação para metodologia:
+            if (colName === 'metodologia') {
+              if (meta.textValue !== undefined) {
+                await this.prisma.planningBlock.update({
+                  where: { id: savedBlock.id },
+                  data: { metodologia: meta.textValue },
+                });
+              }
+              const specMeta = await this.prisma.specification.findFirst({
+                where: { sessionId, colName: { equals: 'metodologia', mode: 'insensitive' } },
+              });
+              if (specMeta) {
+                await this.prisma.planningMetadataValue.deleteMany({
+                  where: {
+                    specificationId: specMeta.id,
+                    planningBlockId: savedBlock.id,
+                  },
+                });
+              }
+              continue;
+            }
+
             let spec = await this.prisma.specification.findFirst({
               where: { sessionId, colName: { equals: colName, mode: 'insensitive' } },
             });

@@ -461,6 +461,31 @@ function collectHierarchicalSections(
 			}
 		}
 
+		if (leafChildren.length === 0 && branchChildren.length === 0) {
+			const title = formatBlockUnit(
+				node.block,
+				nodeIndex,
+				orderSpec?.customLabel,
+			);
+			const breadcrumbs = node.ancestorPath.map((anc, ancIdx) =>
+				formatBlockUnit(anc, ancIdx, orderSpec?.customLabel),
+			);
+			const dateRange = formatBlockDateRange(
+				node.block.startAt,
+				node.block.endAt,
+			);
+
+			sections.push({
+				id: `sec-${node.block.id}`,
+				parentBlock: node.block,
+				title,
+				breadcrumbs,
+				dateRange,
+				blocks: [node.block],
+			});
+			return;
+		}
+
 		if (leafChildren.length > 0) {
 			const title = formatBlockUnit(
 				node.block,
@@ -646,8 +671,14 @@ export function paginatePlanning(
 			const hasBreadcrumbs = section.breadcrumbs.length > 0;
 			const hasParentMet =
 				showMethodology && Boolean(section.parentBlock?.metodologia);
+			const hasParentMetas = Boolean(
+				section.parentBlock?.metadataValues?.some((m) => Boolean(m.textValue)),
+			);
 			const effectiveSectionTitleCost =
-				sectionTitleCost + (hasBreadcrumbs ? 14 : 0) + (hasParentMet ? 24 : 0);
+				sectionTitleCost +
+				(hasBreadcrumbs ? 14 : 0) +
+				(hasParentMet ? 24 : 0) +
+				(hasParentMetas ? 22 : 0);
 
 			let blockIndex = 0;
 			let isContinuation = false;

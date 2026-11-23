@@ -15,10 +15,10 @@ This document defines the core invariants, operating workflows, and context boun
 
 ## 📚 Global Documentation
 
-| Document | Purpose |
-| :--- | :--- |
+| Document                                | Purpose                                                                                           |
+| :-------------------------------------- | :------------------------------------------------------------------------------------------------ |
 | 📖 [docs/WORKFLOW.md](docs/WORKFLOW.md) | Fluxo de trabalho da IA: tomada de decisão, portões de aprovação humana e ciclo de implementação. |
-| 📖 [docs/GITHUB.md](docs/GITHUB.md) | GitHub & MCP guidelines: agent permissions, issue tracking, branch conventions, and PR workflow. |
+| 📖 [docs/GITHUB.md](docs/GITHUB.md)     | GitHub & MCP guidelines: agent permissions, issue tracking, branch conventions, and PR workflow.  |
 
 ---
 
@@ -26,7 +26,9 @@ This document defines the core invariants, operating workflows, and context boun
 
 The monorepo is divided into strict domains. Before modifying any application, the agent **MUST** read the entry point document indicated in the table below.
 
-| Path | Tech Stack & Role | Local Context Entry Point |
-| :--- | :--- | :--- |
+| Path            | Tech Stack & Role                                                                                                              | Local Context Entry Point                                                                                                                                                     |
+| :-------------- | :----------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/service/` | **Backend Core (NestJS + Prisma + PostgreSQL):** Business logic, persistence, lesson planning orchestration, and AI streaming. | 📖 Read [`apps/service/docs/GLOBAL.md`](apps/service/docs/GLOBAL.md) (and [`apps/service/docs/planning/`](apps/service/docs/planning/README.md) for lesson planning features) |
-| `apps/web/` | **Frontend (React + TanStack Router + Tailwind CSS):** Teacher-facing interactive UI. | 📖 Read [`apps/web/docs/GLOBAL.md`](apps/web/docs/GLOBAL.md) |
+| `apps/web/`     | **Frontend (React + TanStack Router + Tailwind CSS):** Teacher-facing interactive UI.                                          | 📖 Read [`apps/web/docs/GLOBAL.md`](apps/web/docs/GLOBAL.md)                                                                                                                  |
+
+---
