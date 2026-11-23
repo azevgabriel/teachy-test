@@ -4,6 +4,123 @@ Repositório monorepo do teste técnico Teachy: um copiloto pedagógico intelige
 
 ---
 
+## 🏛️ Arquitetura da Solução
+
+O projeto adota uma arquitetura desacoplada e orientada a serviços conteinerizados via Docker Compose, separando com rigor as responsabilidades entre interface web, backend de orquestração pedagógica, microsserviço de renderização de alta fidelidade e persistência de dados.
+
+### Diagrama de Arquitetura
+
+<p align="center">
+  <img src="assets/diagram.png" alt="Arquitetura do Sistema Teachy Test" width="750" />
+</p>
+
+<details>
+<summary><b>Visualizar diagrama interativo em formato Mermaid</b></summary>
+
+```mermaid
+flowchart TD
+    subgraph Host["Host Machine"]
+        subgraph Client["Client Application (Vite.js + TailwindCSS)"]
+            Browser["Navegador Web"]
+        end
+    end
+
+    subgraph Docker["Docker Engine (Docker Compose Environment)"]
+        subgraph Network["Docker Network (Bridge)"]
+            subgraph Backend["Container: NestJS Backend"]
+                NodeRuntime["Node.js Runtime (versão LTS)"]
+                NestApp["NestJS Application"]
+                PrismaClient["Prisma ORM Client"]
+                AWSClient["AWS SDK Client (Lambda Invoker)"]
+                GoogleGenAIClient["Google GenAI SDK Client"]
+
+                NodeRuntime --> NestApp
+                NestApp --> PrismaClient
+                NestApp --> AWSClient
+                NestApp --> GoogleGenAIClient
+            end
+
+            subgraph Database["Container: Database"]
+                Postgres["Imagem Oficial PostgreSQL"]
+                PgData[("Docker Volume: pgdata")]
+                Postgres --> PgData
+            end
+
+            subgraph Microservice["Container: Microservico de Conversao"]
+                LambdaRIE["Imagem Base AWS Lambda (RIE - Runtime Interface Emulator)"]
+                Handler["Handler Entrypoint"]
+                Playwright["Playwright (Chromium Headless) - PDF"]
+                DocxWorker["python-docx Worker - DOCX"]
+
+                LambdaRIE --> Handler
+                Handler --> Playwright
+                Handler --> DocxWorker
+            end
+        end
+    end
+
+    subgraph Cloud["Google Cloud AI"]
+        Gemini["Gemini 3.8 Flash (LLM API)"]
+    end
+
+    Browser <-->|"HTTP REST / SSE Stream"| NestApp
+    PrismaClient -->|"TCP: 5432 - SQL Queries"| Postgres
+    AWSClient -->|"HTTP POST: 8080/2015-03-31/functions/function/invocations"| LambdaRIE
+    GoogleGenAIClient <-->|"HTTPS - Stream de Tokens"| Gemini
+```
+
+</details>
+
+### Detalhamento dos Componentes
+
+1. **Host Machine & Client Application (`apps/web`):**
+   - **Tecnologias:** React 19, Vite.js, Tailwind CSS v4, TanStack Router e design system com Radix UI / shadcn/ui.
+   - **Navegador Web:** Executado diretamente na máquina host (`http://localhost:5173`), entregando ao professor uma experiência fluida de co-criação.
+   - **Comunicação Híbrida Segregada:**
+     - **Streaming em Tempo Real (SSE):** Consumo contínuo de tokens pedagógicos da IA via Server-Sent Events, com suporte a cancelamento cooperativo instantâneo (_cancel mid-flight_) através de `AbortController`.
+     - **REST Tradicional (`async/await`):** Operações determinísticas de CRUD, paginação, download de arquivos e recuperação de dados de sessões.
+   - **Living Draft:** Visualizador em tempo real paginado em padrão folha A4 com renderização precisa do planejamento em co-criação.
+
+2. **Docker Engine (`apps/service/docker-compose.yml`):**
+   - Orquestra os contêineres locais interconectados através de uma rede bridge isolada (`Docker Network Bridge`), garantindo reprodutibilidade idêntica do ambiente.
+
+3. **Container: Backend Core (`apps/service` — `teachy_service`):**
+   - **Runtime:** Node.js (versão LTS).
+   - **Framework:** NestJS com modularização estrita e Casos de Uso atômicos (`PlanningModule`, `AiModule`, `CatalogModule`).
+   - **Clientes & Integrações Centrais:**
+     - **Prisma ORM Client:** Mapeamento objeto-relacional com schemas modulares em `prisma/models/`, gerenciando transações ACID, integridade referencial e o catálogo oficial da BNCC.
+     - **AWS SDK Client (Lambda Invoker):** Despacha requisições de conversão ao microsserviço de renderização via protocolo padrão AWS Lambda RIE, isolando I/O gráfico pesado do backend principal.
+     - **Google GenAI SDK Client:** Interface com o modelo **Gemini 3.8 Flash**, injetando o estado atual do banco como _Snapshot Único da Verdade_, aplicando guardrails pedagógicos e processando o transformador de saída dupla (`DualOutputStreamTransformer`) para separar o diálogo humano do payload estruturado oculto (`<!--PLANNING_PATCH: ... -->`).
+
+4. **Container: Database (`teachy_postgres`):**
+   - **Imagem Oficial:** `postgres:16-alpine`.
+   - **Persistência:** Volume gerenciado `postgres_data` (`/var/lib/postgresql/data`), assegurando persistência durável dos dados entre reinicializações.
+   - **Massa de Dados:** Armazena as 1.705 habilidades canônicas da BNCC, componentes curriculares, histórico cronológico de conversas e os planejamentos hierárquicos e dinâmicos (padrão EAV com `Specification`).
+   - **Conexão:** `TCP: 5432` com pool de conexões otimizado pelo Prisma.
+
+5. **Container: Microserviço de Conversão (`apps/engine` — `teachy_engine`):**
+   - **Imagem Base:** `public.ecr.aws/lambda/python:3.12` com Amazon Linux 2023 e AWS Lambda RIE (_Runtime Interface Emulator_) embutido.
+   - **Paridade Cloud:** Permite invocações idênticas às de uma função AWS Lambda Serverless através de `HTTP POST: 8080/2015-03-31/functions/function/invocations`.
+   - **Motores de Renderização Especializados:**
+     - **Playwright (Chromium Headless) - PDF:** Executa o Chromium headless para compilar o HTML/CSS do planejamento diretamente para PDF A4 (retrato ou paisagem), garantindo exata paridade visual com a interface.
+     - **python-docx Worker - DOCX:** Constrói documentos nativos do Microsoft Word / Google Docs (`.docx`) com tabelas formatadas, células editáveis, cabeçalhos sombreados e metadados dinâmicos.
+
+6. **Google Cloud AI (Serviço Externo):**
+   - **Modelo:** `Gemini 3.8 Flash` (Google Cloud Generative AI).
+   - **Comunicação:** Conexão criptografada `HTTPS` com streaming de tokens em tempo real.
+   - **Papel Pedagógico:** Atua como copiloto investigativo e socrático para estruturar planos de aula, sugerir metodologias ativas e alinhar códigos e habilidades curriculares à realidade escolar brasileira.
+
+### Resumo das Comunicações & Protocolos
+
+| Origem                              | Destino                             | Protocolo / Porta                      | Finalidade                                                                       |
+| :---------------------------------- | :---------------------------------- | :------------------------------------- | :------------------------------------------------------------------------------- |
+| **Navegador Web (`apps/web`)**      | **NestJS Backend (`apps/service`)** | `HTTP REST` / `SSE Stream` (`:3000`)   | Envio de comandos, upload de materiais, streaming de respostas da IA e consultas |
+| **NestJS Backend (`apps/service`)** | **PostgreSQL (`teachy_postgres`)**  | `TCP: 5432` (SQL Queries via Prisma)   | Persistência transacional, catálogo da BNCC e consultas relacionais              |
+| **NestJS Backend (`apps/service`)** | **Engine Lambda (`teachy_engine`)** | `HTTP POST: 8080/2015-03-31/...` (RIE) | Invocação assíncrona para renderização de alta fidelidade em PDF e DOCX          |
+| **NestJS Backend (`apps/service`)** | **Google Cloud AI**                 | `HTTPS` (Stream de Tokens)             | Geração de linguagem natural e emissão de patches estruturados da IA             |
+
+---
+
 ## 🧠 Tomada de Decisão: Linha Cronológica de Raciocínio
 
 Abaixo está o registro cronológico das decisões de arquitetura, modelagem e produto ao longo do desenvolvimento, detalhando o que foi pensado e a linha de raciocínio adotada em cada etapa:
@@ -97,7 +214,7 @@ cp .env.example .env
 > [!IMPORTANT]
 > Certifique-se de preencher `GEMINI_API_KEY` no seu `.env` para que o serviço de IA funcione corretamente.
 
-#### Passo 1.2: Inicializar Containers Docker (PostgreSQL + NestJS)
+#### Passo 1.2: Inicializar Containers Docker (PostgreSQL + Engine + NestJS)
 
 ```bash
 # Subir containers em segundo plano
@@ -112,6 +229,7 @@ docker compose logs -f
 
 - **API NestJS:** Disponível em `http://localhost:3000` (verifique com `curl http://localhost:3000`).
 - **PostgreSQL:** Disponível em `localhost:5432`.
+- **Microsserviço de Conversão (Engine):** Disponível em `http://localhost:8080/2015-03-31/functions/function/invocations`.
 
 #### Passo 1.3: Migrações e Seed do Catálogo da BNCC
 
