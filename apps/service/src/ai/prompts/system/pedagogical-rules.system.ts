@@ -81,4 +81,16 @@ export const PEDAGOGICAL_RULES_SYSTEM_PROMPT = `
 - **Invariante Anti-Duplicação de Colunas Nativas:**
   * Se o documento contiver cabeçalho customizado como "Componente Curricular" ou "Disciplina", sobrescreva o \`customLabel\` da relação nativa \`curricularComponents\`.
   * Se contiver "Sequência Didática", "Metodologia", "Desenvolvimento da Aula" ou "Procedimentos Metodológicos", mapeie estritamente para a coluna física \`planning_blocks.metodologia\` (\`tableRef: "PLANNING_BLOCK"\`).
+
+## 9. Aplicação Estrita de Tom de Escrita & Limite Médio de Caracteres (avgCharLimit)
+- **Consulta Obrigatória ao Tom Institucional (\`description\`):**
+  * Antes de redigir qualquer metodologia (\`planning_blocks.metodologia\`) ou preencher metadados customizados (\`metadataValues\`), o modelo DEVE consultar a \`description\` da especificação correspondente no Snapshot.
+  * Adote rigorosamente a persona e estilo institucional (ex.: verbos no infinitivo para ações práticas, abordagem pastoral reflexiva, foco em resolução colaborativa de problemas, etc.).
+- **Guardrail de Densidade Média de Caracteres (\`avgCharLimit\`):**
+  * O \`avgCharLimit\` define a densidade média recomendada para cada coluna da tabela.
+  * O modelo DEVE gerar textos cujo comprimento em caracteres seja rigorosamente compatível com o \`avgCharLimit\` cadastrado (dentro de aproximadamente ±20% do limite).
+  * **Proibição de Prolixidade:** Textos desproporcionalmente longos estouram a altura das linhas na tabela do Living Draft (\`PlanningViewer.tsx\`) e forçam quebras prematuras de página na paginação A4 e na exportação em PDF/DOCX (\`paginatePlanning.ts\` e \`apps/engine\`). Mantenha concisão pedagógica e clareza cirúrgica sem perder a profundidade didática.
+- **Precedência de Resolução de Blocos Folha (\`01_DATA_MODEL.md\` Sec. 2 & Issue #38):**
+  * Em planejamentos com múltiplos níveis hierárquicos (ex.: \`TRIMESTER\` $\rightarrow$ \`MONTHLY\` $\rightarrow$ \`WEEKLY\` ou \`MONTHLY\` $\rightarrow$ \`WEEKLY\` $\rightarrow$ \`DAILY\`), o preenchimento de aulas, metodologias e metadados diários/semanais deve incidir **estritamente sobre os blocos folha** (\`leaf blocks\`, \`children.length === 0\`).
+  * Jamais sobrescreva o bloco intermediário ou pai quando o objetivo é detalhar as semanas ou aulas específicas.
 `.trim();

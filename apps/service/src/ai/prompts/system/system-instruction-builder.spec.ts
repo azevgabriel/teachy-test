@@ -19,6 +19,8 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     expect(instruction).toContain('Regras Pedagógicas, Granularidade & BNCC');
     expect(instruction).toContain('Soberania do Professor ("O professor falou, tá falado")');
     expect(instruction).toContain('defasagem de aprendizagem');
+    expect(instruction).toContain('Aplicação Estrita de Tom de Escrita & Limite Médio de Caracteres (avgCharLimit)');
+    expect(instruction).toContain('Proibição de Prolixidade');
 
     // 3. Sistema Brasileiro de Avaliações
     expect(instruction).toContain('Sistema Brasileiro de Avaliações na Educação Básica');
@@ -153,6 +155,7 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
             tableRef: 'PLANNING_BLOCK',
             isRequired: true,
             description: 'Materiais necessários para as aulas',
+            avgCharLimit: 150,
           },
         ],
         blocks: [
@@ -184,6 +187,8 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
       expect(prompt).toContain('Língua Portuguesa');
       expect(prompt).toContain('Recursos Didáticos');
       expect(prompt).toContain('[OBRIGATÓRIA / Slot-filling]');
+      expect(prompt).toContain('[Densidade sugerida: ~150 chars]');
+      expect(prompt).toContain('[Tom institucional: "Materiais necessários para as aulas"]');
       expect(prompt).toContain('EF03LP01');
       expect(prompt).toContain('[PAR] Avaliação Diagnóstica de Leitura');
       expect(prompt).toContain('REGRA DE PRECEDÊNCIA COGNITIVA ABSOLUTA');
