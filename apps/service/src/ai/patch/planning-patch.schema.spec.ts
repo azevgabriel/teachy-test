@@ -351,6 +351,44 @@ describe('PlanningPatchSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('deve validar ADD_SPECIFICATION e UPSERT_PLANNING com description e avgCharLimit', () => {
+    const payloadAdd = {
+      operation: 'ADD_SPECIFICATION',
+      data: {
+        colName: 'recursos',
+        customLabel: 'Recursos Didáticos',
+        tableRef: 'PLANNING_BLOCK',
+        description: 'Materiais práticos e manipuláveis.',
+        avgCharLimit: 120,
+        isRequired: true,
+        order: 2,
+      },
+    };
+    const resAdd = planningPatchPayloadSchema.safeParse(payloadAdd);
+    expect(resAdd.success).toBe(true);
+    if (resAdd.success && 'data' in resAdd.data) {
+      expect((resAdd.data as any).data.avgCharLimit).toBe(120);
+      expect((resAdd.data as any).data.description).toBe('Materiais práticos e manipuláveis.');
+    }
+
+    const payloadUpsert = {
+      operation: 'UPSERT_PLANNING',
+      data: {
+        specifications: [
+          {
+            colName: 'metodologia',
+            customLabel: 'Sequência Didática',
+            tableRef: 'PLANNING_BLOCK',
+            description: 'Metodologias ativas com foco colaborativo.',
+            avgCharLimit: 250,
+          },
+        ],
+      },
+    };
+    const resUpsert = planningPatchPayloadSchema.safeParse(payloadUpsert);
+    expect(resUpsert.success).toBe(true);
+  });
+
   it('deve validar com sucesso EXPORT_PLANNING com defaults de format (pdf) e orientation (portrait)', () => {
     const payload = {
       operation: 'EXPORT_PLANNING',

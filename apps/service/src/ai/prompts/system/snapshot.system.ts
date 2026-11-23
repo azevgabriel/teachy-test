@@ -218,16 +218,21 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
         const orderInfo = s.order !== undefined && s.order !== 0 ? ` [Ordem: ${s.order}]` : '';
         const visibility = s.isVisible === false ? ' [OCULTA/INVISÍVEL]' : '';
         const showLabelInfo = s.showLabel === false ? ' [SEM RÓTULO/VALOR DIRETO]' : '';
-        const charLimitInfo = s.avgCharLimit ? ` [Limite: ~${s.avgCharLimit} chars]` : '';
+        const charLimitInfo = s.avgCharLimit ? ` [Densidade sugerida: ~${s.avgCharLimit} chars]` : '';
+        const toneInfo = s.description ? ` [Tom institucional: "${s.description}"]` : '';
         const macroCount = planning.metadataValues?.filter((m) => m.specificationId === s.id).length || 0;
         const blockCount = blocks.reduce((acc, b) => acc + (b.metadataValues?.filter((m) => m.specificationId === s.id).length || 0), 0);
         const totalValues = macroCount + blockCount;
         const status = totalValues > 0
           ? `✅ [PREENCHIDA: ${totalValues} registro(s)]`
           : `⚠️ [SEM VALOR CADASTRADO / PENDENTE SLOT-FILLING]`;
-        return `  - "${label}" (colName: ${s.colName}, Escopo: ${scope})${required}${orderInfo}${visibility}${showLabelInfo}${charLimitInfo} ${status}${s.description ? `: ${s.description}` : ''}`;
+        return `  - "${label}" (colName: ${s.colName}, Escopo: ${scope})${required}${orderInfo}${visibility}${showLabelInfo}${charLimitInfo}${toneInfo} ${status}`;
       })
       .join('\n');
+
+    if (specifications.some((s) => s.description || s.avgCharLimit)) {
+      specsText += '\n  ⚠️ Diretriz Estrita de Geração: Ao preencher ou gerar textos para as colunas acima, consulte e cumpra rigorosamente o Tom Institucional e mantenha o volume textual compatível com a Densidade Sugerida (avgCharLimit), mantendo concisão e prevenindo estouro de layout na impressão A4 e exportação PDF/DOCX.\n';
+    }
   }
 
   // Metadados Macro do Planejamento
