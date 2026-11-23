@@ -350,4 +350,78 @@ describe('PlanningPatchSchema', () => {
     const result = planningPatchPayloadSchema.safeParse(payload);
     expect(result.success).toBe(true);
   });
+
+  it('deve validar com sucesso EXPORT_PLANNING com defaults de format (pdf) e orientation (portrait)', () => {
+    const payload = {
+      operation: 'EXPORT_PLANNING',
+      data: {},
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (result.success && 'data' in result.data) {
+      expect((result.data as any).data).toEqual({
+        format: 'pdf',
+        orientation: 'portrait',
+      });
+    }
+  });
+
+  it('deve validar com sucesso EXPORT_PLANNING sem passar data (aplicando defaults)', () => {
+    const payload = {
+      operation: 'EXPORT_PLANNING',
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (result.success && 'data' in result.data) {
+      expect((result.data as any).data).toEqual({
+        format: 'pdf',
+        orientation: 'portrait',
+      });
+    }
+  });
+
+  it('deve validar com sucesso EXPORT_PLANNING com format docx e orientation landscape', () => {
+    const payload = {
+      operation: 'EXPORT_PLANNING',
+      data: {
+        format: 'docx',
+        orientation: 'landscape',
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+    if (result.success && 'data' in result.data) {
+      expect((result.data as any).data).toEqual({
+        format: 'docx',
+        orientation: 'landscape',
+      });
+    }
+  });
+
+  it('deve rejeitar EXPORT_PLANNING com format inválido', () => {
+    const payload = {
+      operation: 'EXPORT_PLANNING',
+      data: {
+        format: 'xlsx',
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
+
+  it('deve rejeitar EXPORT_PLANNING com orientation inválida', () => {
+    const payload = {
+      operation: 'EXPORT_PLANNING',
+      data: {
+        orientation: 'diagonal',
+      },
+    };
+
+    const result = planningPatchPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+  });
 });

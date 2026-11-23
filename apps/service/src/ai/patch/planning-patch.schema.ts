@@ -228,6 +228,20 @@ export const reallocateLessonsPatchSchema = z.object({
     .optional(),
 });
 
+// 10. Exportação Conversacional do Planejamento (PDF / DOCX)
+export const exportPlanningPatchDataSchema = z.object({
+  format: z.enum(['pdf', 'docx']).default('pdf'),
+  orientation: z.enum(['portrait', 'landscape']).default('portrait'),
+});
+
+export const exportPlanningPatchSchema = z.object({
+  operation: z.literal('EXPORT_PLANNING'),
+  data: exportPlanningPatchDataSchema.default({
+    format: 'pdf',
+    orientation: 'portrait',
+  }),
+});
+
 // Operação Única Discriminada
 export const singlePatchOperationSchema = z.discriminatedUnion('operation', [
   upsertPlanningPatchSchema,
@@ -240,6 +254,7 @@ export const singlePatchOperationSchema = z.discriminatedUnion('operation', [
   resetPlanningPatchSchema,
   readOnlyPatchSchema,
   reallocateLessonsPatchSchema,
+  exportPlanningPatchSchema,
 ]);
 
 // Payload do Patch: Pode ser uma única operação ou uma lista de operações sequenciais

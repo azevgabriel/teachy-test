@@ -76,3 +76,33 @@ test("ChatTimeline: não exibe mensagens de loading quando isStreaming é falso"
 		markup.includes("Entendido! Proposta ajustada com foco em frações"),
 	);
 });
+
+test("ChatTimeline: renderiza ExportActionCard quando a mensagem da IA possui comando EXPORT_PLANNING", () => {
+	const messagesWithExport: Message[] = [
+		{
+			id: "msg-ai-export",
+			sessionId: "sess-1",
+			type: "IA",
+			interrupted: false,
+			text: "Aqui está o seu planejamento formatado para exportação.",
+			createdAt: "2026-03-01T10:05:00Z",
+			commands: {
+				operation: "EXPORT_PLANNING",
+				data: { format: "pdf", orientation: "portrait" },
+			},
+		},
+	];
+
+	const markup = renderToStaticMarkup(
+		<ChatTimeline
+			messages={messagesWithExport}
+			sessionId="sess-1"
+			hasBlocks={true}
+		/>,
+	);
+
+	assert.ok(markup.includes("Exportar Planejamento"));
+	assert.ok(markup.includes("Baixar PDF"));
+	assert.ok(markup.includes("PDF"));
+	assert.ok(markup.includes("Retrato"));
+});

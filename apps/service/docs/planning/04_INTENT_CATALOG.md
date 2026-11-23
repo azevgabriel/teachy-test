@@ -24,6 +24,7 @@ flowchart TD
     Classifier -->|7. Full Reset| I7["RESET_PLANNING\nCascading reset to restart planning workflow"]
     Classifier -->|8. Native Override & Reordering| I8["ADD_SPECIFICATION / UPSERT_PLANNING\nOverrides native labels, toggles visibility, sets order"]
     Classifier -->|9. Macro BNCC Purge| I9["UPSERT_PLANNING (bnccCodes: [])\nClears macro header skills while preserving daily block skills"]
+    Classifier -->|10. Document Export| I10["EXPORT_PLANNING\nEmits export command (PDF/DOCX) for chat download card"]
 ```
 
 ---
@@ -258,9 +259,22 @@ flowchart TD
 
 ---
 
+## 12. Conversational Document Export (`EXPORT_PLANNING`)
+* **Teacher Command:** *"Exporte meu planejamento em PDF"*, *"Gere o documento Word/DOCX deste plano"*, *"Baixar em PDF modo paisagem"*, or *"/export docx"*.
+* **AI Behavior:**
+  - Acknowledges the export request collegially in the textual response.
+  - Emits the structured `EXPORT_PLANNING` patch specifying `format` (`pdf` or `docx`, default `pdf`) and `orientation` (`portrait` or `landscape`, default `portrait`).
+  - As a read/dispatch operation with zero mutations to the relational planning tree, the patch is saved in `Conversation.commands` and transmitted to the frontend to render the interactive `ExportActionCard`.
+* **Prisma Operation:**
+  - Read-only action: zero relational table mutations. The operation is persisted in `Conversation.commands`.
+
+---
+
 ## 11. Natural Language $\leftrightarrow$ Schema Mapping Dictionary
 
 | Teacher Conversational Expression | Schema Target | Scope / Table | Primary Operation | Anti-Duplication Rule |
+| :--- | :--- | :--- | :--- | :--- |
+| *"Exportar em PDF/DOCX"*, *"Baixar plano"* | `Conversation.commands` | Chat (`CONVERSATION`) | `EXPORT_PLANNING` | Command operation; triggers interactive download card in chat. |
 | :--- | :--- | :--- | :--- | :--- |
 | *"No cabeçalho"*, *"No topo"*, *"No ciclo"* | `Planning` | Macro Header (`PLANNING`) | `UPSERT_PLANNING` / `ADD_SPECIFICATION` | Direct macro properties; never attach to blocks. |
 | *"Disciplina"*, *"Matéria"*, *"Componente"* | `Planning.curricularComponents` | Macro Header (`PLANNING`) | `UPSERT_PLANNING.curricularComponentNames` | Override `colName: "curricularComponents"`; **never** create `colName: "disciplina"` in EAV. |

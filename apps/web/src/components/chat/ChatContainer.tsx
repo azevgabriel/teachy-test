@@ -393,6 +393,12 @@ export function ChatContainer({
 						partialText={partialText}
 						isStreaming={isStreaming}
 						onCopyMessage={handleCopyMessage}
+						sessionId={activeSessionId}
+						hasBlocks={
+							isPlanningLoading
+								? true
+								: (activePlanning?.blocks?.length ?? 0) > 0
+						}
 					/>
 				)}
 

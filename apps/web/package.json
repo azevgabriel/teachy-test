@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "format": "biome format",
     "lint": "biome lint",
-    "check": "biome check"
+    "check": "biome check",
+    "test": "npx tsx --test src/components/chat/*.test.tsx src/components/planning/*.test.tsx"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.4.0",
