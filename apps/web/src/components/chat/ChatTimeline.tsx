@@ -82,14 +82,21 @@ function groupMessagesByDate(messages: Message[]): GroupedMessages[] {
 	return Object.values(groups);
 }
 
-const LOADING_STEPS = [
+export const COMPREHENSION_LOADING_STEPS = [
 	"Pensando na proposta pedagógica...",
-	"Criando um plano estruturado...",
 	"Carregando informações já estabelecidas...",
 	"Validando regras e habilidades da BNCC...",
-	"Alinhando componentes curriculares...",
-	"Organizando atividades e práticas didáticas...",
-	"Estruturando os detalhes finais...",
+	"Consultando materiais de apoio e referências...",
+	"Alinhando componentes curriculares e objetivos...",
+	"Organizando a abordagem didática da aula...",
+];
+
+export const APPLICATION_LOADING_STEPS = [
+	"Aplicando mudanças estruturais ao planejamento...",
+	"Atualizando seções, blocos e atividades didáticas...",
+	"Sincronizando modificações com o banco de dados...",
+	"Ajustando cronograma e distribuição pedagógica...",
+	"Consolidando e salvando alterações no planejamento...",
 ];
 
 export function ChatTimeline({
@@ -100,21 +107,39 @@ export function ChatTimeline({
 }: ChatTimelineProps) {
 	const scrollAnchorRef = React.useRef<HTMLDivElement>(null);
 	const containerRef = React.useRef<HTMLDivElement>(null);
-	const [loadingStepIndex, setLoadingStepIndex] = React.useState(0);
+	const [comprehensionStepIndex, setComprehensionStepIndex] = React.useState(0);
+	const [applicationStepIndex, setApplicationStepIndex] = React.useState(0);
 
-	// Ciclo interativo das etapas pedagógicas de carregamento
+	const isApplicationPhase = Boolean(partialText);
+
+	// Ciclo interativo das etapas pedagógicas de carregamento (compreensão vs aplicação)
 	React.useEffect(() => {
 		if (!isStreaming) {
-			setLoadingStepIndex(0);
+			setComprehensionStepIndex(0);
+			setApplicationStepIndex(0);
 			return;
 		}
 
+		if (!isApplicationPhase) {
+			setApplicationStepIndex(0);
+			const interval = setInterval(() => {
+				setComprehensionStepIndex(
+					(prev) => (prev + 1) % COMPREHENSION_LOADING_STEPS.length,
+				);
+			}, 2600);
+
+			return () => clearInterval(interval);
+		}
+
+		// Fase de aplicação estrutural (quando partialText já possui conteúdo)
 		const interval = setInterval(() => {
-			setLoadingStepIndex((prev) => (prev + 1) % LOADING_STEPS.length);
+			setApplicationStepIndex(
+				(prev) => (prev + 1) % APPLICATION_LOADING_STEPS.length,
+			);
 		}, 2600);
 
 		return () => clearInterval(interval);
-	}, [isStreaming]);
+	}, [isStreaming, isApplicationPhase]);
 
 	// Agrupa mensagens cronologicamente por dia para montar a linha do tempo
 	const groupedMessages = React.useMemo(
@@ -296,14 +321,24 @@ export function ChatTimeline({
 											<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" />
 										</span>
 										<span className="font-medium animate-pulse">
-											{LOADING_STEPS[loadingStepIndex]}
+											{
+												APPLICATION_LOADING_STEPS[
+													applicationStepIndex %
+														APPLICATION_LOADING_STEPS.length
+												]
+											}
 										</span>
 									</div>
 								</div>
 							) : (
 								<div className="flex items-center gap-2.5 py-1">
 									<span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-										{LOADING_STEPS[loadingStepIndex]}
+										{
+											COMPREHENSION_LOADING_STEPS[
+												comprehensionStepIndex %
+													COMPREHENSION_LOADING_STEPS.length
+											]
+										}
 									</span>
 									<span className="inline-flex gap-1 items-center shrink-0">
 										<span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.3s]" />
