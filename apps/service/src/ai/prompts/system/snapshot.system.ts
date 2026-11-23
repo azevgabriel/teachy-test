@@ -55,6 +55,7 @@ export interface SnapshotSpecification {
   isVisible?: boolean;
   showLabel?: boolean;
   description?: string | null;
+  avgCharLimit?: number | null;
 }
 
 export interface PlanningSnapshot {
@@ -217,13 +218,14 @@ export function formatSnapshotPrompt(snapshot?: PlanningSnapshot | null): string
         const orderInfo = s.order !== undefined && s.order !== 0 ? ` [Ordem: ${s.order}]` : '';
         const visibility = s.isVisible === false ? ' [OCULTA/INVISÍVEL]' : '';
         const showLabelInfo = s.showLabel === false ? ' [SEM RÓTULO/VALOR DIRETO]' : '';
+        const charLimitInfo = s.avgCharLimit ? ` [Limite: ~${s.avgCharLimit} chars]` : '';
         const macroCount = planning.metadataValues?.filter((m) => m.specificationId === s.id).length || 0;
         const blockCount = blocks.reduce((acc, b) => acc + (b.metadataValues?.filter((m) => m.specificationId === s.id).length || 0), 0);
         const totalValues = macroCount + blockCount;
         const status = totalValues > 0
           ? `✅ [PREENCHIDA: ${totalValues} registro(s)]`
           : `⚠️ [SEM VALOR CADASTRADO / PENDENTE SLOT-FILLING]`;
-        return `  - "${label}" (colName: ${s.colName}, Escopo: ${scope})${required}${orderInfo}${visibility}${showLabelInfo} ${status}${s.description ? `: ${s.description}` : ''}`;
+        return `  - "${label}" (colName: ${s.colName}, Escopo: ${scope})${required}${orderInfo}${visibility}${showLabelInfo}${charLimitInfo} ${status}${s.description ? `: ${s.description}` : ''}`;
       })
       .join('\n');
   }

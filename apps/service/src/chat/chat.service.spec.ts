@@ -9,6 +9,7 @@ describe('ChatService', () => {
   let chatService: ChatService;
   let prismaMock: any;
   let aiServiceMock: any;
+  let documentsServiceMock: any;
 
   beforeEach(() => {
     prismaMock = {
@@ -23,6 +24,10 @@ describe('ChatService', () => {
         create: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
+      },
+      referenceDocument: {
+        findUnique: vi.fn(),
+        findFirst: vi.fn(),
       },
       applicationYear: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -44,10 +49,15 @@ describe('ChatService', () => {
       getPlanningBySessionId: vi.fn(),
     };
 
+    documentsServiceMock = {
+      extractDocument: vi.fn(),
+    };
+
     chatService = new ChatService(
       prismaMock as unknown as PrismaService,
       aiServiceMock as unknown as AiService,
       planningServiceMock as any,
+      documentsServiceMock as any,
     );
   });
 
@@ -638,6 +648,113 @@ describe('ChatService', () => {
           }),
         }),
       );
+    });
+
+    it('loads and injects school reference into system instruction when attachment is provided', async () => {
+      prismaMock.session.findUnique.mockResolvedValue({
+        id: 's-ref',
+        name: 'Sessão com Matriz',
+        conversations: [],
+      });
+
+      prismaMock.conversation.create
+        .mockResolvedValueOnce({ id: 'u-1', text: 'Analise esse modelo', type: 'USER', interrupted: false })
+        .mockResolvedValueOnce({ id: 'ia-1', text: '', type: 'IA', interrupted: false });
+
+      prismaMock.referenceDocument.findUnique.mockResolvedValue({
+        id: 'doc-1',
+        originalName: 'matriz-escola.pdf',
+        extractedData: {
+          layout: {
+            suggestedGranularity: 'BIMONTHLY',
+            hierarchyLevels: ['BIMONTHLY', 'WEEKLY'],
+            columns: [
+              {
+                name: 'metodologia',
+                customLabel: 'Sequência Didática',
+                isCore: true,
+                targetTable: 'PLANNING_BLOCK',
+                sampleToneText: 'Metodologia ativa',
+                detectedAvgCharLimit: 250,
+              },
+            ],
+          },
+          data: {
+            curricularComponent: 'Matemática',
+            applicationYear: '3º ano do Ensino Fundamental I',
+          },
+          rawText: 'Matriz Matemática 3º ano',
+        },
+        extractedText: 'Matriz Matemática 3º ano',
+      });
+
+      aiServiceMock.streamChat.mockResolvedValue('Ok');
+
+      await chatService.processMessageStream(
+        's-ref',
+        'Analise esse modelo da coordenação',
+        new AbortController().signal,
+        () => {},
+        undefined,
+        { id: 'doc-1', name: 'matriz-escola.pdf' },
+      );
+
+      expect(prismaMock.referenceDocument.findUnique).toHaveBeenCalledWith({
+        where: { id: 'doc-1' },
+      });
+
+      const callArgs = aiServiceMock.streamChat.mock.calls[0][0];
+      expect(callArgs.userMessage).toContain('[Documento de Referência da Escola Anexado: "matriz-escola.pdf"]');
+      expect(callArgs.systemInstruction).toContain('Matriz Pedagógica Escolar de Referência (Documento Institucional Anexado)');
+      expect(callArgs.systemInstruction).toContain('matriz-escola.pdf');
+      expect(callArgs.systemInstruction).toContain('Sequência Didática');
+      expect(callArgs.systemInstruction).toContain('1️⃣ Apenas o Modelo (Layout)');
+    });
+
+    it('triggers document extraction if extractedData is null when document is linked', async () => {
+      prismaMock.session.findUnique.mockResolvedValue({
+        id: 's-ref-2',
+        name: 'Sessão',
+        conversations: [],
+      });
+
+      prismaMock.conversation.create
+        .mockResolvedValueOnce({ id: 'u-1', text: 'Use o documento', type: 'USER', interrupted: false })
+        .mockResolvedValueOnce({ id: 'ia-1', text: '', type: 'IA', interrupted: false });
+
+      prismaMock.referenceDocument.findUnique.mockResolvedValue({
+        id: 'doc-uncached',
+        originalName: 'plano.docx',
+        extractedData: null,
+        extractedText: null,
+      });
+
+      documentsServiceMock.extractDocument.mockResolvedValue({
+        layout: {
+          suggestedGranularity: 'WEEKLY',
+          hierarchyLevels: ['WEEKLY'],
+          columns: [],
+        },
+        data: {
+          curricularComponent: 'História',
+        },
+        rawText: 'História 6º ano',
+      });
+
+      aiServiceMock.streamChat.mockResolvedValue('Ok');
+
+      await chatService.processMessageStream(
+        's-ref-2',
+        'Use esse modelo',
+        new AbortController().signal,
+        () => {},
+        undefined,
+        { id: 'doc-uncached', name: 'plano.docx' },
+      );
+
+      expect(documentsServiceMock.extractDocument).toHaveBeenCalledWith('doc-uncached');
+      const callArgs = aiServiceMock.streamChat.mock.calls[0][0];
+      expect(callArgs.systemInstruction).toContain('História');
     });
   });
 

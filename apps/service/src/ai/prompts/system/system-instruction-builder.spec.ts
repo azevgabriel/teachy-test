@@ -35,6 +35,7 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
     expect(instruction).toContain('READ_ONLY');
     expect(instruction).toContain('DELETE_BLOCK_WITH_GAP');
     expect(instruction).toContain('RESET_PLANNING');
+    expect(instruction).toContain('INGEST_SCHOOL_REFERENCE');
 
     // 5. Protocolo de Saída Dupla & Envelope de Persistência
     expect(instruction).toContain('Protocolo de Saída Dupla & Envelope Estruturado de Persistência');
@@ -281,6 +282,93 @@ describe('SystemInstructionBuilder & Modular System Prompts', () => {
       expect(instruction).toContain('"3º ano do Ensino Fundamental I"');
       expect(instruction).toContain('"Corpo, gestos e movimentos"');
       expect(instruction).toContain('"Matemática"');
+    });
+
+    it('injects rich school reference matrix context when document is attached or linked', () => {
+      const instruction = SystemInstructionBuilder.build({
+        schoolReference: {
+          originalName: 'matriz-colegio-santa-cruz.pdf',
+          extractedData: {
+            layout: {
+              suggestedGranularity: 'BIMONTHLY',
+              hierarchyLevels: ['BIMONTHLY', 'WEEKLY'],
+              columns: [
+                {
+                  name: 'metodologia',
+                  customLabel: 'Sequência Didática',
+                  isCore: true,
+                  targetTable: 'PLANNING_BLOCK',
+                  order: 1,
+                  sampleToneText: 'Metodologias ativas com resolução de problemas',
+                  detectedAvgCharLimit: 250,
+                },
+                {
+                  name: 'recursos_didaticos',
+                  customLabel: 'Recursos Didáticos',
+                  isCore: false,
+                  targetTable: 'PLANNING_BLOCK',
+                  order: 2,
+                  sampleToneText: 'Materiais manipuláveis e recursos digitais',
+                  detectedAvgCharLimit: 100,
+                },
+                {
+                  name: 'aplicacao_pastoral',
+                  customLabel: 'Aplicação Pastoral',
+                  isCore: false,
+                  targetTable: 'PLANNING',
+                  order: 3,
+                  sampleToneText: 'Valores cristãos e ética comunitária',
+                  detectedAvgCharLimit: 180,
+                },
+              ],
+            },
+            data: {
+              curricularComponent: 'Língua Portuguesa',
+              applicationYear: '3º ano do Ensino Fundamental I',
+              dates: {
+                startAt: '2026-02-02T00:00:00.000Z',
+                endAt: '2026-04-30T23:59:59.000Z',
+              },
+              bnccCodesFound: ['EF03LP01', 'EF03LP02'],
+              evaluationsFound: [
+                { name: 'Avaliação Parcial', instrumentType: 'PAR', description: 'Prova escrita' },
+              ],
+              rawLessonBlocks: [
+                {
+                  order: 1,
+                  metodologia: 'Acolhimento e leitura compartilhada',
+                  contentByColumn: { conteudo: 'Gênero Contos' },
+                },
+              ],
+            },
+            rawText: 'Matriz Pedagógica Colégio Santa Cruz...',
+          },
+          rawTextSummary: 'Matriz Pedagógica Colégio Santa Cruz...',
+        },
+      });
+
+      // Seção e cabeçalho
+      expect(instruction).toContain('Matriz Pedagógica Escolar de Referência (Documento Institucional Anexado)');
+      expect(instruction).toContain('matriz-colegio-santa-cruz.pdf');
+
+      // Camada de Layout
+      expect(instruction).toContain('Granularidade temporal sugerida: BIMONTHLY');
+      expect(instruction).toContain('Progressão hierárquica: BIMONTHLY -> WEEKLY');
+      expect(instruction).toContain('[PLANNING_BLOCK] "metodologia" (Rótulo: "Sequência Didática")');
+      expect(instruction).toContain('Tom/Redação: "Metodologias ativas com resolução de problemas"');
+      expect(instruction).toContain('Limite sugerido: 250 chars');
+      expect(instruction).toContain('[PLANNING_BLOCK] "recursos_didaticos" (Rótulo: "Recursos Didáticos")');
+      expect(instruction).toContain('[PLANNING] "aplicacao_pastoral" (Rótulo: "Aplicação Pastoral")');
+
+      // Camada de Dados
+      expect(instruction).toContain('Componente Curricular: Língua Portuguesa');
+      expect(instruction).toContain('Ano / Etapa de Aplicação: 3º ano do Ensino Fundamental I');
+      expect(instruction).toContain('EF03LP01, EF03LP02');
+      expect(instruction).toContain('[PAR] Avaliação Parcial (Prova escrita)');
+
+      // Diretrizes Proativas (1️⃣ Apenas o Modelo vs 2️⃣ Importação Completa)
+      expect(instruction).toContain('1️⃣ Apenas o Modelo (Layout)');
+      expect(instruction).toContain('2️⃣ Importação Completa');
     });
   });
 });

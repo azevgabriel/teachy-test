@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiService, type ChatHistoryMessage } from '../ai/ai.service.js';
 import {
@@ -10,6 +10,7 @@ import {
   type PlanningPatchPayload,
 } from '../ai/patch/index.js';
 import { PlanningService } from '../planning/planning.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
 import { matchApplicationYear, matchCurricularComponent } from '../planning/utils/index.js';
 import type { CreateSessionDto } from './dto/create-session.dto.js';
 import type { Conversation, Session } from '@prisma/client';
@@ -128,6 +129,7 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
     private readonly planningService: PlanningService,
+    @Optional() private readonly documentsService?: DocumentsService,
   ) {}
 
   private async fetchRelevantBnccSkills(
@@ -407,11 +409,67 @@ export class ChatService {
         : Promise.resolve([]),
     ]);
 
+    // 5.1. Carregar documento de referência da escola caso exista anexo ou vínculo na sessão (#45)
+    let schoolReference: {
+      originalName: string;
+      extractedData?: any;
+      rawTextSummary?: string;
+    } | null = null;
+
+    try {
+      let refDoc: any = null;
+      if (attachment?.id && this.prisma.referenceDocument?.findUnique) {
+        refDoc = await this.prisma.referenceDocument.findUnique({
+          where: { id: attachment.id },
+        });
+      } else if (attachment?.name && this.prisma.referenceDocument?.findFirst) {
+        refDoc = await this.prisma.referenceDocument.findFirst({
+          where: {
+            originalName: attachment.name,
+            sessions: { some: { id: sessionId } },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+
+      if (!refDoc && this.prisma.referenceDocument?.findFirst) {
+        refDoc = await this.prisma.referenceDocument.findFirst({
+          where: { sessions: { some: { id: sessionId } } },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+
+      if (refDoc) {
+        if (!refDoc.extractedData && this.documentsService) {
+          try {
+            const extracted = await this.documentsService.extractDocument(refDoc.id);
+            refDoc.extractedData = extracted;
+            refDoc.extractedText = extracted.rawText;
+          } catch (err) {
+            this.logger.warn(
+              `Erro ao extrair referência escolar ${refDoc.id}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+
+        schoolReference = {
+          originalName: refDoc.originalName,
+          extractedData: refDoc.extractedData,
+          rawTextSummary: refDoc.extractedText || undefined,
+        };
+      }
+    } catch (err) {
+      this.logger.debug(
+        `Não foi possível carregar documento de referência: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     const systemInstruction = SystemInstructionBuilder.build({
       snapshot,
       bnccSkills,
       availableYears,
       availableCurricularComponents,
+      schoolReference,
     });
 
     let accumulatedText = '';
@@ -419,7 +477,7 @@ export class ChatService {
     const transformer = new DualOutputStreamTransformer();
 
     const userMessageForAi = attachment
-      ? `[Documento de Referência Anexado: "${attachment.name}"]\n${userText}`
+      ? `[Documento de Referência da Escola Anexado: "${attachment.name}"]\n${userText}`
       : userText;
 
     try {
