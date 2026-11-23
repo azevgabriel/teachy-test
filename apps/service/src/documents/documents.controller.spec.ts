@@ -69,4 +69,24 @@ describe('DocumentsController', () => {
     expect(documentsServiceMock.listSessionDocuments).toHaveBeenCalledWith('s1');
     expect(res).toEqual([{ id: 'doc-1', isLinkedToSession: true }]);
   });
+
+  it('extracts document via GET endpoint', async () => {
+    documentsServiceMock.extractDocument = vi
+      .fn()
+      .mockResolvedValue({ rawText: 'extracted info' });
+
+    const res = await controller.extractDocument('d1');
+    expect(documentsServiceMock.extractDocument).toHaveBeenCalledWith('d1');
+    expect(res).toEqual({ rawText: 'extracted info' });
+  });
+
+  it('triggers document extraction via POST endpoint', async () => {
+    documentsServiceMock.extractDocument = vi
+      .fn()
+      .mockResolvedValue({ rawText: 'extracted info' });
+
+    const res = await controller.triggerExtractDocument('d1');
+    expect(documentsServiceMock.extractDocument).toHaveBeenCalledWith('d1');
+    expect(res).toEqual({ rawText: 'extracted info' });
+  });
 });

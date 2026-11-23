@@ -2,9 +2,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { LocalStorageService } from './local-storage.service.js';
+import { ContentExtractionPipeline } from '../ingestion/content-extraction.pipeline.js';
+import type { ExtractedSchoolReference } from '../ingestion/types.js';
 
 export const ALLOWED_MIME_TYPES = [
   'application/pdf',
@@ -42,6 +45,7 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly localStorageService: LocalStorageService,
+    @Optional() private readonly extractionPipeline?: ContentExtractionPipeline,
   ) {}
 
   validateFile(file: UploadedFileDto): void {
@@ -271,5 +275,48 @@ export class DocumentsService {
     });
 
     return { success: true };
+  }
+
+  async extractDocument(id: string): Promise<ExtractedSchoolReference> {
+    const doc = await this.prisma.referenceDocument.findUnique({
+      where: { id },
+    });
+
+    if (!doc) {
+      throw new NotFoundException(`Documento com ID ${id} não encontrado.`);
+    }
+
+    // 1. Cache hit: se já possui extractedText e extractedData, retorna diretamente do cache sem re-processamento
+    if (doc.extractedText && doc.extractedData) {
+      return {
+        ...(doc.extractedData as unknown as ExtractedSchoolReference),
+        rawText: doc.extractedText,
+      };
+    }
+
+    if (!this.extractionPipeline) {
+      throw new BadRequestException('Pipeline de extração não configurado.');
+    }
+
+    const buffer = await this.localStorageService.readFile(doc.localFilePath);
+    const result = await this.extractionPipeline.extract({
+      buffer,
+      mimeType: doc.mimeType,
+      originalName: doc.originalName,
+    });
+
+    // 2. Cache miss: grava o resultado do parsing no cache do ReferenceDocument (#48)
+    await this.prisma.referenceDocument.update({
+      where: { id },
+      data: {
+        extractedText: result.rawText,
+        extractedData: {
+          layout: result.layout,
+          data: result.data,
+        } as any,
+      },
+    });
+
+    return result;
   }
 }
