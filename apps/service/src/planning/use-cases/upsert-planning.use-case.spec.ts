@@ -23,8 +23,13 @@ describe('UpsertPlanningUseCase', () => {
 
   beforeEach(() => {
     prismaMock = {
+      session: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'session-1', name: 'Nova Conversa' }),
+        update: vi.fn().mockResolvedValue({}),
+      },
       applicationYear: {
         findMany: vi.fn().mockResolvedValue(mockYears),
+        findUnique: vi.fn(),
       },
       curricularComponent: {
         findMany: vi.fn().mockResolvedValue(mockComponents),
@@ -35,8 +40,9 @@ describe('UpsertPlanningUseCase', () => {
       },
       planning: {
         findFirst: vi.fn(),
+        findUnique: vi.fn(),
         create: vi.fn(),
-        update: vi.fn(),
+        update: vi.fn().mockImplementation((args: any) => Promise.resolve({ id: args?.where?.id || 'plan-1', ...args?.data })),
       },
       bnccSkill: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -438,6 +444,52 @@ describe('UpsertPlanningUseCase', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('Atualização automática de Session.name (Issue #20)', () => {
+    it('atualiza automaticamente o nome da sessão caso ainda seja o padrão "Nova Conversa"', async () => {
+      prismaMock.planning.findFirst.mockResolvedValue(null);
+      prismaMock.planning.create.mockResolvedValue({
+        id: 'plan-1',
+        granularity: 'WEEKLY',
+      });
+      prismaMock.session.findUnique.mockResolvedValue({
+        id: 'session-1',
+        name: 'Nova Conversa',
+      });
+
+      await useCase.execute('session-1', {
+        granularity: 'WEEKLY',
+        curricularComponentNames: ['Língua Portuguesa'],
+        applicationYearName: '3º ano do Ensino Fundamental I',
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        data: {
+          name: 'Planejamento Semanal - Língua Portuguesa (3º ano do Ensino Fundamental I)',
+        },
+      });
+    });
+
+    it('não sobrescreve o nome da sessão se o professor tiver renomeado manualmente', async () => {
+      prismaMock.planning.findFirst.mockResolvedValue(null);
+      prismaMock.planning.create.mockResolvedValue({
+        id: 'plan-1',
+        granularity: 'WEEKLY',
+      });
+      prismaMock.session.findUnique.mockResolvedValue({
+        id: 'session-1',
+        name: 'Turma 301 - Manhã (Renomeado Manualmente)',
+      });
+
+      await useCase.execute('session-1', {
+        granularity: 'WEEKLY',
+        curricularComponentNames: ['Matemática'],
+      });
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
   });
 });

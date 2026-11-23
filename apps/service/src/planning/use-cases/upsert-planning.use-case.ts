@@ -499,6 +499,88 @@ export class UpsertPlanningUseCase {
       await this.reallocateLessonsUseCase.execute(sessionId, { recessDates: data.recessDates });
     }
 
+    // 6. Atualização automática de Session.name para nomes descritivos caso o nome seja o padrão
+    const session = await this.prisma.session?.findUnique?.({
+      where: { id: sessionId },
+      select: { id: true, name: true },
+    });
+
+    if (session && (session.name === 'Nova Conversa' || !session.name.trim())) {
+      const granularityMap: Record<string, string> = {
+        ANNUAL: 'Anual',
+        SEMESTER: 'Semestral',
+        TRIMESTER: 'Trimestral',
+        BIMONTHLY: 'Bimestral',
+        MONTHLY: 'Mensal',
+        WEEKLY: 'Semanal',
+        DAILY: 'Diário',
+        CUSTOM: 'Personalizado',
+      };
+
+      const resolvedGranularity = planning?.granularity || data.granularity;
+      const granLabel = resolvedGranularity ? granularityMap[resolvedGranularity] : undefined;
+
+      // Componentes curriculares
+      let componentNames = data.curricularComponentNames;
+      if (!componentNames || componentNames.length === 0) {
+        const comps = await this.prisma.curricularComponent?.findMany?.({
+          where: { id: { in: componentIds } },
+          select: { name: true },
+        });
+        if (comps && comps.length > 0) {
+          componentNames = comps.map((c: any) => c.name);
+        }
+      }
+      if ((!componentNames || componentNames.length === 0) && planning?.id) {
+        const fullPlan = await this.prisma.planning?.findUnique?.({
+          where: { id: planning.id },
+          include: {
+            curricularComponents: { select: { name: true } },
+            applicationYear: { select: { name: true } },
+          },
+        });
+        if (fullPlan?.curricularComponents?.length) {
+          componentNames = fullPlan.curricularComponents.map((c: any) => c.name);
+        }
+        if (!data.applicationYearName && fullPlan?.applicationYear?.name) {
+          data.applicationYearName = fullPlan.applicationYear.name;
+        }
+      }
+      const compsText = componentNames?.filter(Boolean).join(', ');
+
+      // Ano escolar
+      let yearName = data.applicationYearName;
+      if (!yearName && applicationYearId) {
+        const year = await this.prisma.applicationYear?.findUnique?.({
+          where: { id: applicationYearId },
+          select: { name: true },
+        });
+        yearName = year?.name;
+      }
+
+      let descriptiveName = '';
+      if (granLabel && compsText && yearName) {
+        descriptiveName = `Planejamento ${granLabel} - ${compsText} (${yearName})`;
+      } else if (granLabel && compsText) {
+        descriptiveName = `Planejamento ${granLabel} - ${compsText}`;
+      } else if (compsText && yearName) {
+        descriptiveName = `Planejamento - ${compsText} (${yearName})`;
+      } else if (compsText) {
+        descriptiveName = `Planejamento - ${compsText}`;
+      } else if (granLabel && yearName) {
+        descriptiveName = `Planejamento ${granLabel} - ${yearName}`;
+      } else if (granLabel) {
+        descriptiveName = `Planejamento ${granLabel}`;
+      }
+
+      if (descriptiveName && this.prisma.session?.update) {
+        await this.prisma.session.update({
+          where: { id: sessionId },
+          data: { name: descriptiveName },
+        });
+      }
+    }
+
     return planning;
   }
 }

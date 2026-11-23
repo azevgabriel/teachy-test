@@ -1,4 +1,5 @@
 import {
+	Calendar,
 	Check,
 	Clock,
 	MessageSquare,
@@ -10,6 +11,8 @@ import {
 	X,
 } from "lucide-react";
 import * as React from "react";
+import { formatGranularity } from "#/components/planning/PlanningHeader";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { ScrollArea } from "#/components/ui/scroll-area";
 import { cn } from "#/lib/utils";
@@ -38,6 +41,38 @@ function formatDate(dateString: string): string {
 	} catch {
 		return "";
 	}
+}
+
+function formatPlanningDateRange(
+	startAt?: string | null,
+	endAt?: string | null,
+): string {
+	if (!startAt && !endAt) return "";
+	try {
+		const formatSingle = (str: string) => {
+			const safeStr = str.includes("T") ? str : `${str}T12:00:00Z`;
+			const d = new Date(safeStr);
+			return d.toLocaleDateString("pt-BR", {
+				day: "2-digit",
+				month: "2-digit",
+				year: "numeric",
+				timeZone: "UTC",
+			});
+		};
+
+		if (startAt && endAt) {
+			return `${formatSingle(startAt)} a ${formatSingle(endAt)}`;
+		}
+		if (startAt) {
+			return `A partir de ${formatSingle(startAt)}`;
+		}
+		if (endAt) {
+			return `Até ${formatSingle(endAt)}`;
+		}
+	} catch {
+		return "";
+	}
+	return "";
 }
 
 export function Sidebar({
@@ -242,72 +277,153 @@ export function Sidebar({
 								}
 
 								// Modo Padrão
+								const hasPlanning = Boolean(
+									session.planning &&
+										((session.planning.curricularComponents &&
+											session.planning.curricularComponents.length > 0) ||
+											session.planning.applicationYear ||
+											session.planning.granularity),
+								);
+
+								const dateRange = formatPlanningDateRange(
+									session.planning?.startAt,
+									session.planning?.endAt,
+								);
+
 								return (
 									<div
 										key={session.id}
 										className={cn(
-											"group relative flex items-center justify-between w-full p-2.5 rounded-lg text-left transition-colors",
+											"group relative flex flex-col w-full p-2.5 rounded-lg text-left transition-colors gap-2",
 											isActive
 												? "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100"
-												: "hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300",
+												: "hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300 border border-transparent",
 										)}
 									>
-										<button
-											type="button"
-											onClick={() => onSelectSession(session.id)}
-											className="flex flex-col items-start min-w-0 flex-1 pr-2 text-left bg-transparent border-0 cursor-pointer p-0"
-										>
-											<div className="flex items-center gap-2 w-full">
+										<div className="flex items-center justify-between w-full gap-1">
+											<button
+												type="button"
+												onClick={() => onSelectSession(session.id)}
+												className="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 cursor-pointer p-0"
+											>
 												<MessageSquare
 													className={cn(
 														"h-3.5 w-3.5 shrink-0",
 														isActive ? "text-emerald-600" : "text-slate-400",
 													)}
 												/>
-												<span className="text-sm font-medium truncate">
+												<span
+													className="text-sm font-semibold truncate"
+													title={session.name}
+												>
 													{session.name}
 												</span>
+											</button>
+
+											{/* Botões de Ação Rápidos (Visíveis no Hover ou quando Ativo) */}
+											<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+												<Button
+													type="button"
+													size="icon"
+													variant="ghost"
+													onClick={(e) => {
+														e.stopPropagation();
+														setEditingId(session.id);
+														setEditingName(session.name);
+														setDeletingId(null);
+													}}
+													title="Renomear conversa"
+													className="h-6 w-6 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+												>
+													<Pencil className="h-3 w-3" />
+												</Button>
+												<Button
+													type="button"
+													size="icon"
+													variant="ghost"
+													onClick={(e) => {
+														e.stopPropagation();
+														setDeletingId(session.id);
+														setEditingId(null);
+													}}
+													title="Excluir conversa"
+													className="h-6 w-6 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+												>
+													<Trash2 className="h-3 w-3" />
+												</Button>
 											</div>
-											<div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 pl-5">
-												<Clock className="h-3 w-3" />
+										</div>
+
+										{/* Pedagogical Badges & Period */}
+										<button
+											type="button"
+											onClick={() => onSelectSession(session.id)}
+											className="flex flex-col items-start w-full text-left bg-transparent border-0 cursor-pointer p-0 gap-1.5 pl-5.5"
+										>
+											{hasPlanning ? (
+												<div className="flex flex-wrap gap-1 items-center">
+													{session.planning?.curricularComponents?.map(
+														(comp) => (
+															<Badge
+																key={comp.id}
+																variant="default"
+																title={comp.name}
+																className="text-[10px] h-4.5 px-1.5 py-0 font-medium max-w-[108px] min-w-0"
+															>
+																<span className="truncate">{comp.name}</span>
+															</Badge>
+														),
+													)}
+													{session.planning?.applicationYear && (
+														<Badge
+															variant="outline"
+															title={session.planning.applicationYear.name}
+															className="text-[10px] h-4.5 px-1.5 py-0 font-medium text-slate-700 dark:text-slate-300 max-w-[108px] min-w-0"
+														>
+															<span className="truncate">
+																{session.planning.applicationYear.name}
+															</span>
+														</Badge>
+													)}
+													{session.planning?.granularity && (
+														<Badge
+															variant="secondary"
+															title={formatGranularity(
+																session.planning.granularity,
+															)}
+															className="text-[10px] h-4.5 px-1.5 py-0 font-medium max-w-[108px] min-w-0"
+														>
+															<span className="truncate">
+																{formatGranularity(
+																	session.planning.granularity,
+																)}
+															</span>
+														</Badge>
+													)}
+												</div>
+											) : (
+												<Badge
+													variant="outline"
+													className="text-[10px] h-4.5 px-1.5 py-0 border-dashed text-slate-400"
+												>
+													Em definição
+												</Badge>
+											)}
+
+											{dateRange && (
+												<div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+													<Calendar className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+													<span className="truncate">{dateRange}</span>
+												</div>
+											)}
+
+											<div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+												<Clock className="h-3 w-3 shrink-0" />
 												<span>
 													{formatDate(session.updatedAt || session.createdAt)}
 												</span>
 											</div>
 										</button>
-
-										{/* Botões de Ação Rápidos (Visíveis no Hover ou quando Ativo) */}
-										<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
-											<Button
-												type="button"
-												size="icon"
-												variant="ghost"
-												onClick={(e) => {
-													e.stopPropagation();
-													setEditingId(session.id);
-													setEditingName(session.name);
-													setDeletingId(null);
-												}}
-												title="Renomear conversa"
-												className="h-7 w-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-											>
-												<Pencil className="h-3.5 w-3.5" />
-											</Button>
-											<Button
-												type="button"
-												size="icon"
-												variant="ghost"
-												onClick={(e) => {
-													e.stopPropagation();
-													setDeletingId(session.id);
-													setEditingId(null);
-												}}
-												title="Excluir conversa"
-												className="h-7 w-7 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-											>
-												<Trash2 className="h-3.5 w-3.5" />
-											</Button>
-										</div>
 									</div>
 								);
 							})}
