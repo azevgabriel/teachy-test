@@ -12,6 +12,7 @@ import {
   formatSnapshotPrompt,
   type PlanningSnapshot,
 } from './snapshot.system.js';
+import type { ExtractedSchoolReference } from '../../../ingestion/types.js';
 
 export interface SystemInstructionContext {
   snapshot?: PlanningSnapshot | null;
@@ -21,6 +22,11 @@ export interface SystemInstructionContext {
   bnccSkills?: Array<{ code: string; description: string }>;
   availableYears?: Array<{ id: string; name: string }>;
   availableCurricularComponents?: Array<{ id: string; name: string }>;
+  schoolReference?: {
+    originalName: string;
+    extractedData?: ExtractedSchoolReference | null;
+    rawTextSummary?: string;
+  } | null;
 }
 
 export class SystemInstructionBuilder {
@@ -92,6 +98,61 @@ ${skillsFormatted}
 `.trim();
 
       sections.push('---', bnccSection);
+    }
+
+    if (context?.schoolReference) {
+      const { originalName, extractedData, rawTextSummary } = context.schoolReference;
+      const layout = extractedData?.layout;
+      const data = extractedData?.data;
+
+      const columnsFormatted = layout?.columns?.length
+        ? layout.columns
+            .map(
+              (c) =>
+                `- [${c.targetTable}] "${c.name}" (Rótulo: "${c.customLabel}") - Core: ${c.isCore ? 'Sim' : 'Não'}${c.sampleToneText ? ` | Tom/Redação: "${c.sampleToneText}"` : ''}${c.detectedAvgCharLimit ? ` | Limite sugerido: ${c.detectedAvgCharLimit} chars` : ''}`,
+            )
+            .join('\n')
+        : '*(Nenhuma coluna identificada)*';
+
+      const hierarchyFormatted = layout?.hierarchyLevels?.join(' -> ') || 'Não detectada';
+
+      const evalsFormatted = data?.evaluationsFound?.length
+        ? data.evaluationsFound
+            .map(
+              (e) =>
+                `- [${e.instrumentType || 'AVAL'}] ${e.name || 'Instrumento'}${e.description ? ` (${e.description})` : ''}`,
+            )
+            .join('\n')
+        : '*(Nenhuma avaliação identificada)*';
+
+      const referenceSection = `
+# Matriz Pedagógica Escolar de Referência (Documento Institucional Anexado)
+O professor vinculou o documento oficial da escola: "${originalName}".
+O pipeline de extração de duas camadas identificou os seguintes moldes e instâncias:
+
+## 📐 Camada de Layout (Estrutura / Molde da Coordenação):
+- Granularidade temporal sugerida: ${layout?.suggestedGranularity || 'Não especificada'}
+- Progressão hierárquica: ${hierarchyFormatted}
+- Colunas e especificações detectadas:
+${columnsFormatted}
+
+## 📊 Camada de Dados (Conteúdos Pré-existentes no Documento):
+- Componente Curricular: ${data?.curricularComponent || 'Não detectado'}
+- Ano / Etapa de Aplicação: ${data?.applicationYear || 'Não detectado'}
+- Período / Datas: ${data?.dates?.startAt ? `${data.dates.startAt} a ${data.dates.endAt}` : 'Não detectado'}
+- Habilidades BNCC encontradas: ${data?.bnccCodesFound?.join(', ') || 'Nenhuma'}
+- Instrumentos avaliativos:
+${evalsFormatted}
+- Quantidade de aulas/blocos brutos extraídos: ${data?.rawLessonBlocks?.length || 0} bloco(s)
+
+${rawTextSummary ? `## 📄 Trecho do Texto Bruto:\n${rawTextSummary.slice(0, 1500)}\n` : ''}
+## 🚨 Diretrizes Obrigatórias de Atuação para Matriz Escolar:
+1. **Primeira Interação com o Documento:** Acolha o professor com empatia na sala dos professores, valide a estrutura encontrada e apresente com clareza as duas opções de importação (1️⃣ Apenas o Modelo vs 2️⃣ Importação Completa).
+2. **Se o professor escolher "1️⃣ Apenas o Modelo (Layout)":** Emita \`UPSERT_PLANNING\` cadastrando todas as colunas em \`specifications\` com seus respectivos tons (\`description\`) e limites de densidade (\`avgCharLimit\`). Em seguida, faça a Análise de Gaps imediata e guie o professor para o início do novo planejamento do zero.
+3. **Se o professor escolher "2️⃣ Importação Completa":** Emita \`UPSERT_PLANNING\` com todas as \`specifications\` E popule todos os blocos, metodologias nativas (\`metodologia\`), datas e BNCCs extraídos.
+`.trim();
+
+      sections.push('---', referenceSection);
     }
 
     if (context?.teacherName) {

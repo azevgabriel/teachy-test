@@ -31,6 +31,10 @@ export class AddSpecificationWithSlotsUseCase {
           customLabel: data.customLabel || existing.customLabel,
           tableRef,
           description: data.description || existing.description,
+          avgCharLimit:
+            data.avgCharLimit !== undefined
+              ? data.avgCharLimit
+              : existing.avgCharLimit,
           isRequired: data.isRequired ?? existing.isRequired,
           order: data.order !== undefined ? data.order : existing.order,
           isVisible: data.isVisible !== undefined ? data.isVisible : existing.isVisible,
@@ -45,6 +49,7 @@ export class AddSpecificationWithSlotsUseCase {
           customLabel: data.customLabel || data.colName,
           tableRef,
           description: data.description || null,
+          avgCharLimit: data.avgCharLimit ?? null,
           isRequired: data.isRequired ?? false,
           order: data.order ?? 0,
           isVisible: data.isVisible ?? true,

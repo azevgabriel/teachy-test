@@ -279,6 +279,42 @@ describe('UpsertPlanningUseCase', () => {
     });
   });
 
+  it('persists specifications with description (tone) and avgCharLimit (density) during school reference ingestion', async () => {
+    const existingPlanning = {
+      id: 'plan-1',
+      sessionId: 'session-1',
+    };
+    prismaMock.planning.findFirst.mockResolvedValue(existingPlanning);
+    prismaMock.planning.update.mockResolvedValue(existingPlanning);
+    prismaMock.specification.findFirst.mockResolvedValue(null);
+
+    await useCase.execute('session-1', {
+      specifications: [
+        {
+          colName: 'metodologia',
+          customLabel: 'Sequência Didática',
+          tableRef: 'PLANNING_BLOCK',
+          description: 'Metodologias ativas com foco em resolução colaborativa.',
+          avgCharLimit: 250,
+          order: 1,
+          isRequired: true,
+        },
+      ],
+    });
+
+    expect(prismaMock.specification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        colName: 'metodologia',
+        customLabel: 'Sequência Didática',
+        tableRef: 'PLANNING_BLOCK',
+        description: 'Metodologias ativas com foco em resolução colaborativa.',
+        avgCharLimit: 250,
+        order: 1,
+        isRequired: true,
+      }),
+    });
+  });
+
   // Novos Testes da Issue #28
 
   describe('Hierarquia de Granularidade & Descida Estrita (Critério de Aceite 1)', () => {

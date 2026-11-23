@@ -67,6 +67,45 @@ ou para múltiplas operações sequenciais:
   ]
 }
 \`\`\`
+   - **Exemplo de Ingestão de Referência Escolar — Modalidade 1 (Apenas o Modelo / Layout):**
+     * Use quando o professor optar por aproveitar apenas o layout, colunas, tom de redação e densidade da escola para planejar do zero:
+\`\`\`json
+{
+  "granularity": "BIMONTHLY",
+  "specifications": [
+    { "colName": "metodologia", "tableRef": "PLANNING_BLOCK", "customLabel": "Sequência Didática", "description": "Abordagem ativa com acolhida e rotação por estações.", "avgCharLimit": 250, "order": 1, "isRequired": true },
+    { "colName": "recursos_didaticos", "tableRef": "PLANNING_BLOCK", "customLabel": "Recursos Didáticos", "description": "Materiais concretos e multimídia.", "avgCharLimit": 100, "order": 2 },
+    { "colName": "aplicacao_pastoral", "tableRef": "PLANNING", "customLabel": "Aplicação Pastoral", "description": "Reflexão ética e princípios institucionais.", "avgCharLimit": 180, "order": 3 }
+  ]
+}
+\`\`\`
+   - **Exemplo de Ingestão de Referência Escolar — Modalidade 2 (Importação Completa):**
+     * Use quando o professor optar por importar tanto o modelo quanto todas as aulas e conteúdos pré-existentes:
+\`\`\`json
+{
+  "granularity": "BIMONTHLY",
+  "curricularComponentNames": ["Língua Portuguesa"],
+  "applicationYearName": "3º ano do Ensino Fundamental I",
+  "startAt": "2026-02-02T00:00:00Z",
+  "endAt": "2026-04-30T23:59:59Z",
+  "bnccCodes": ["EF03LP01"],
+  "specifications": [
+    { "colName": "metodologia", "tableRef": "PLANNING_BLOCK", "customLabel": "Sequência Didática", "description": "Leitura mediada e produção textual guiada.", "avgCharLimit": 250, "order": 1, "isRequired": true },
+    { "colName": "conteudo", "tableRef": "PLANNING_BLOCK", "customLabel": "Conteúdo", "avgCharLimit": 120, "order": 2 }
+  ],
+  "blocks": [
+    {
+      "order": 1,
+      "startAt": "2026-02-02",
+      "metodologia": "Sequência Didática: 1. Leitura compartilhada de conto. 2. Identificação de personagens.",
+      "bnccCodes": ["EF03LP01"],
+      "metadataValues": [
+        { "colName": "conteudo", "textValue": "Gênero narrativo e estrutura de contos." }
+      ]
+    }
+  ]
+}
+\`\`\`
 
 2. **\`UPDATE_BLOCK_BY_DATE\` (Troca Pontual de Bloco):**
    - Use para atualizar a metodologia, habilidades BNCC ou avaliações de uma data específica.
@@ -79,8 +118,8 @@ ou para múltiplas operações sequenciais:
 4. **\`ADD_SPECIFICATION\` (Criação de Coluna Customizada EAV ou Customização de Coluna Nativa):**
    - Use ao registrar uma nova coluna após a confirmação/desambiguação com o professor ou ao sobrescrever rótulo de coluna nativa.
    - Pode receber \`initialValue\` para já gravar o valor e evitar coluna órfã!
-   - Suporta \`order\` (inteiro determinístico para ordenação visual), \`isVisible: false\` (para ocultar seção ou coluna sem deletar dados) e \`showLabel: false\` (para omitir o rótulo e exibir apenas o valor direto).
-   - Formato: \`{ "colName": "aplicacao_crista", "customLabel": "Aplicação Cristã", "tableRef": "PLANNING", "initialValue": "Texto...", "isRequired": true, "order": 1, "isVisible": true, "showLabel": true }\`
+   - Suporta \`description\` (tom de redação institucional), \`avgCharLimit\` (densidade média de caracteres), \`order\` (inteiro determinístico para ordenação visual), \`isVisible: false\` (para ocultar seção ou coluna sem deletar dados) e \`showLabel: false\` (para omitir o rótulo e exibir apenas o valor direto).
+   - Formato: \`{ "colName": "aplicacao_crista", "customLabel": "Aplicação Cristã", "tableRef": "PLANNING", "description": "Reflexão ética institucional", "avgCharLimit": 150, "initialValue": "Texto...", "isRequired": true, "order": 1, "isVisible": true, "showLabel": true }\`
 
 5. **\`FILL_METADATA\` (Preenchimento de Metadados EAV ou Colunas Nativas como Metodologia):**
    - Use quando o professor fornecer valores para colunas customizadas ou para preencher a metodologia de blocos específicos.

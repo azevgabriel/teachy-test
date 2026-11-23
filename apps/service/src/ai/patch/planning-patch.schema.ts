@@ -34,6 +34,7 @@ export const addSpecificationPatchDataSchema = z.object({
   customLabel: z.string().optional(),
   tableRef: specificationTableRefEnum,
   description: z.string().optional(),
+  avgCharLimit: z.number().int().optional(),
   isRequired: z.boolean().default(false),
   order: z.number().int().default(0),
   isVisible: z.boolean().default(true),

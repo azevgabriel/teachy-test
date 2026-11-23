@@ -176,6 +176,10 @@ export class UpsertPlanningUseCase {
               customLabel: specData.customLabel || existingSpec.customLabel,
               tableRef: specData.tableRef,
               description: specData.description || existingSpec.description,
+              avgCharLimit:
+                specData.avgCharLimit !== undefined
+                  ? specData.avgCharLimit
+                  : existingSpec.avgCharLimit,
               isRequired: specData.isRequired ?? existingSpec.isRequired,
               order: specData.order !== undefined ? specData.order : existingSpec.order,
               isVisible: specData.isVisible !== undefined ? specData.isVisible : existingSpec.isVisible,
@@ -190,6 +194,7 @@ export class UpsertPlanningUseCase {
               customLabel: specData.customLabel || specData.colName,
               tableRef: specData.tableRef,
               description: specData.description || null,
+              avgCharLimit: specData.avgCharLimit ?? null,
               isRequired: specData.isRequired ?? false,
               order: specData.order ?? 0,
               isVisible: specData.isVisible ?? true,
