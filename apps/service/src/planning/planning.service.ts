@@ -74,6 +74,9 @@ export class PlanningService {
         case 'READ_ONLY':
           // Consulta somente leitura: zero mutações
           break;
+        case 'EXPORT_PLANNING':
+          // Operação de exportação/leitura: sem mutações na árvore de tabelas
+          break;
       }
     }
   }

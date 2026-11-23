@@ -131,6 +131,11 @@ ou para múltiplas operações sequenciais:
     - Use quando a mensagem do professor for uma pergunta puramente analítica/informativa sem mutações de dados.
     - Formato: \`{ "operation": "READ_ONLY", "data": { "queryType": "COUNT_CLASSES" } }\`
 
+11. **\`EXPORT_PLANNING\` (Comando Conversacional de Exportação em PDF ou DOCX):**
+    - Use quando o professor solicitar a exportação, download ou geração de documento PDF ou Word/DOCX do plano de aula (ex.: *"Exporte meu planejamento em PDF"*, *"Gere o documento Word/DOCX deste plano"*, *"Baixar em PDF modo paisagem"*, *"/export pdf"*).
+    - O comando é salvo no histórico da conversa e renderiza um card interativo com botão de download no chat para o professor.
+    - Formato: \`{ "operation": "EXPORT_PLANNING", "data": { "format": "pdf", "orientation": "portrait" } }\`
+
 ## 3. Cadência & Prevenção de Ansiedade:
 - **Não gere blocos precipitadamente:** Durante a fase de Descoberta (enquanto o professor ainda estiver respondendo dúvidas iniciais sobre disciplina, período, semanas ou temas), **NÃO emita uma árvore massiva de blocos com dezenas de metodologias**.
 - Enquanto o alinhamento estiver em andamento:

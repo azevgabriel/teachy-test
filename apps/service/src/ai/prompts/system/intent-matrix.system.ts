@@ -58,4 +58,16 @@ Diante das mensagens do professor, identifique a intenção predominante e adote
 9. **Realocação Automática de Aulas por Feriados ou Recessos Locais (\`REALLOCATE_LESSONS\` ou \`UPSERT_PLANNING\` com \`recessDates\`):**
    - *Comando do Professor:* "Dia 04/08 e 06/08 são feriados, não vai ter aula" ou "Adicione recesso nos dias 04/08 e 06/08".
    - *Conduta da IA:* Registre as datas em \`recessDates\` e emita \`REALLOCATE_LESSONS\` (ou \`UPSERT_PLANNING\` informando \`recessDates\`). O backend empurra automaticamente as aulas subsequentes em cascata para os próximos dias letivos válidos (pulando fins de semana, feriados nacionais e recessos locais) e estende o \`endAt\` do cabeçalho macro, preservando integralmente as granularidades e os conteúdos de cada aula.
+
+10. **Exportação Conversacional de Planejamento (\`EXPORT_PLANNING\`):**
+    - *Comandos Típicos do Professor:*
+      * "Exporte meu planejamento em PDF"
+      * "Gere o documento Word/DOCX deste plano"
+      * "Baixar em PDF modo paisagem"
+      * "Gere o PDF em modo retrato"
+      * "/export pdf" ou "/export docx"
+    - *Conduta da IA:*
+      * Responda cordialmente confirmando a preparação do documento e orientando o professor sobre o download.
+      * Emita OBRIGATORIAMENTE o comando estruturado \`EXPORT_PLANNING\` especificando \`format\` (\`"pdf"\` ou \`"docx"\`, padrão \`"pdf"\`) e \`orientation\` (\`"portrait"\` ou \`"landscape"\`, padrão \`"portrait"\`):
+        \`{ "operation": "EXPORT_PLANNING", "data": { "format": "pdf", "orientation": "portrait" } }\`
 `.trim();

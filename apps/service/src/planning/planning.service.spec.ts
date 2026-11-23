@@ -205,6 +205,17 @@ describe('PlanningService', () => {
       expect(upsertSpy).not.toHaveBeenCalled();
       expect(resetSpy).not.toHaveBeenCalled();
     });
+
+    it('does not trigger mutation use cases for EXPORT_PLANNING', async () => {
+      const payload = {
+        operation: 'EXPORT_PLANNING' as const,
+        data: { format: 'pdf' as const, orientation: 'portrait' as const },
+      };
+
+      await planningService.applyPatch('s1', payload);
+      expect(upsertSpy).not.toHaveBeenCalled();
+      expect(resetSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('getPlanningBySessionId', () => {

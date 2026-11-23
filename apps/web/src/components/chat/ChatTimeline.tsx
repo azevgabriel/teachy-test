@@ -4,14 +4,17 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { ScrollArea } from "#/components/ui/scroll-area";
 import { cn } from "#/lib/utils";
+import { ExportActionCard } from "./ExportActionCard";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import type { Message } from "./types";
+import { getExportPlanningCommands, type Message } from "./types";
 
 interface ChatTimelineProps {
 	messages: Message[];
 	partialText?: string;
 	isStreaming?: boolean;
 	onCopyMessage?: (text: string) => void;
+	sessionId?: string;
+	hasBlocks?: boolean;
 }
 
 function formatTime(dateString: string): string {
@@ -104,6 +107,8 @@ export function ChatTimeline({
 	partialText = "",
 	isStreaming = false,
 	onCopyMessage,
+	sessionId,
+	hasBlocks = true,
 }: ChatTimelineProps) {
 	const scrollAnchorRef = React.useRef<HTMLDivElement>(null);
 	const containerRef = React.useRef<HTMLDivElement>(null);
@@ -212,6 +217,11 @@ export function ChatTimeline({
 								? isUserInterrupted
 								: message.interrupted && !isFallbackInterruptedText;
 
+							const exportCommands =
+								!isUser && message.commands
+									? getExportPlanningCommands(message.commands)
+									: [];
+
 							return (
 								<div
 									key={message.id}
@@ -252,6 +262,21 @@ export function ChatTimeline({
 												isUser={isUser}
 											/>
 										</div>
+
+										{/* Card interativo de exportação emitido pela IA */}
+										{exportCommands.length > 0 && (
+											<div className="flex flex-col gap-2 mt-2">
+												{exportCommands.map((cmd) => (
+													<ExportActionCard
+														key={`${message.id}-export-${cmd.format}-${cmd.orientation}`}
+														sessionId={message.sessionId || sessionId || ""}
+														format={cmd.format}
+														orientation={cmd.orientation}
+														hasBlocks={hasBlocks}
+													/>
+												))}
+											</div>
+										)}
 
 										{/* Ação rápida para o usuário copiar seu comando interrompido para o input */}
 										{isUser && isUserInterrupted && (
