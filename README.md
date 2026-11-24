@@ -4,6 +4,20 @@ Repositório monorepo do teste técnico Teachy: um copiloto pedagógico intelige
 
 ---
 
+## 🎥 Demonstração em Vídeo
+
+Confira a apresentação e demonstração prática do copiloto pedagógico em funcionamento:
+
+<p align="center">
+  <a href="https://youtu.be/kTH-HiCyri8" target="_blank">
+    <img src="https://img.youtube.com/vi/kTH-HiCyri8/maxresdefault.jpg" alt="Vídeo de Demonstração - Teachy Test" width="750" />
+  </a>
+</p>
+
+> 📺 **Assista no YouTube:** [https://youtu.be/kTH-HiCyri8](https://youtu.be/kTH-HiCyri8)
+
+---
+
 ## 🏛️ Arquitetura da Solução
 
 O projeto adota uma arquitetura desacoplada e orientada a serviços conteinerizados via Docker Compose, separando com rigor as responsabilidades entre interface web, backend de orquestração pedagógica, microsserviço de renderização de alta fidelidade e persistência de dados.
